@@ -37,23 +37,36 @@ _NOISE_RE = re.compile(
 
 
 def _split_segments(text):
-    text = text.replace("\r", "\n")
-    text = re.sub(r"(?i)\b(?:and\s+then|then|after\s+that)\b", ";", text)
-    text = re.sub(r"\n+|;", ";", text)
+    text = text.replace("\\r", "\\n")
+    text = re.sub(r"(?i)\\b(?:and\\s+then|then|after\\s+that)\\b", ";", text)
+    text = re.sub(r"\\n+|;", ";", text)
     # A comma before another exercise clause is a common way to list sessions.
     text = re.sub(
-        r",\s*(?=[A-Za-z][^,;]{0,100}\b(?:\d{1,2}\s*[x×]|\d{1,2}\s+sets?\b))",
+        r",\\s*(?=[A-Za-z][^,;]{0,100}\\b(?:\\d{1,2}\\s*[x×]|\\d{1,2}\\s+sets?\\b))",
         ";",
         text,
         flags=re.IGNORECASE,
     )
-    text = re.sub(
-        r"\s+and\s+(?=[A-Za-z][^;]{0,100}\b(?:\d{1,2}\s*[x×]|\d{1,2}\s+sets?\b))",
-        ";",
-        text,
-        flags=re.IGNORECASE,
-    )
-    return [part.strip(" ,.") for part in text.split(";") if part.strip(" ,.")]
+    segments = []
+    for clause in text.split(";"):
+        pieces = re.split(r"\\s+and\\s+", clause, flags=re.IGNORECASE)
+        current = pieces[0].strip()
+        for piece in pieces[1:]:
+            piece = piece.strip()
+            begins_with_exercise = bool(re.match(r"[A-Za-zÀ-ÖØ-öø-ÿ]", piece))
+            if begins_with_exercise and _find_prescriptions(current) and _find_prescriptions(piece):
+                segments.append(current)
+                current = piece
+            else:
+                current = (current + " and " + piece).strip()
+        if current:
+            # Carry set-by-set fragments forward as additional prescriptions
+            # for the exercise named in the preceding clause.
+            if segments and re.match(r"(?i)^(?:set\\s*\\d+\\s*[:=-]\\s*)?\\d{1,3}\\s*reps?\\b", current):
+                segments[-1] += "; " + current
+            else:
+                segments.append(current)
+    return [part.strip(" ,.") for part in segments if part.strip(" ,.")]
 
 
 def _find_prescriptions(segment):
@@ -153,6 +166,9 @@ def parse_workout_note(note):
             continue
 
         weights = _weight_matches(segment)
+        if len(weights) > 1 and len(weights) != len(prescriptions):
+            unknown.append(segment)
+            continue
         name = _exercise_name(segment, prescriptions, weights)
         if not name:
             unknown.append(segment)
