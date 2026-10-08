@@ -118,14 +118,14 @@ PAGE = """
     <article class="card">
       <h2>Recent workouts</h2>
       {% for row in workouts %}
-      <div class="record"><strong>{{ row.exercise }} · {{ row.sets }} × {{ row.reps }}{% if row.weight_kg is not none %} · {{ row.weight_kg:g }} kg{% endif %}</strong><small>{{ row.workout_date }}{% if row.notes %} · {{ row.notes }}{% endif %}</small></div>
+      <div class="record"><strong>{{ row.exercise }} · {{ row.sets }} × {{ row.reps }}{% if row.weight_kg is not none %} · {{ "%.1f"|format(row.weight_kg) }} kg{% endif %}</strong><small>{{ row.workout_date }}{% if row.notes %} · {{ row.notes }}{% endif %}</small></div>
       {% else %}<p class="empty">No workouts recorded yet.</p>{% endfor %}
     </article>
     <article class="card">
       <h2>Recent measurements</h2>
       {% for row in measurements %}
-      <div class="record"><strong>{{ row.weight_kg:g }} kg{% if row.body_fat_pct is not none %} · {{ row.body_fat_pct:g }}% body fat{% endif %}</strong>
-        <small>{{ row.measured_on }}{% for label, value in [('Waist', row.waist_cm), ('Chest', row.chest_cm), ('Hips', row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ value:g }} cm{% endif %}{% endfor %}</small></div>
+      <div class="record"><strong>{{ "%.1f"|format(row.weight_kg) }} kg{% if row.body_fat_pct is not none %} · {{ "%.1f"|format(row.body_fat_pct) }}% body fat{% endif %}</strong>
+        <small>{{ row.measured_on }}{% for label, value in [('Waist', row.waist_cm), ('Chest', row.chest_cm), ('Hips', row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</small></div>
       {% else %}<p class="empty">No measurements recorded yet.</p>{% endfor %}
     </article>
   </section>
