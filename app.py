@@ -598,7 +598,8 @@ CONNECTION_PAGE = """
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Local workout model</h2></div></div>
 <p class="muted">TimGym uses Qwen 3.5 2B through Ollama on this server. The workout note is interpreted on your CasaOS machine; it is saved only after you review and confirm it. No ChatGPT or OpenAI API is used for this flow.</p>
 <p class="panel-kicker">Model: qwen3.5:2b · CPU inference · first setup downloads about 3 GB</p>
-<div style="margin-top:14px"><button class="secondary full-button" id="check-model" type="button">Check model status</button><p class="panel-kicker" id="model-status-text" role="status" aria-live="polite" style="margin:10px 0 0">Checking local model…</p><pre class="diagnostics" id="model-diagnostics" hidden></pre></div>
+<div style="margin-top:14px"><button class="secondary full-button" id="check-model" type="button">Check model status</button><p class="panel-kicker" id="model-status-text" role="status" aria-live="polite" style="margin:10px 0 0">Checking local model…</p><pre class="diagnostics" id="model-diagnostics" hidden></pre>
+<button class="secondary full-button" id="test-model" type="button" style="margin-top:10px">Run a model test</button><p class="panel-kicker" id="model-test-status" role="status" aria-live="polite" style="margin:8px 0 0">Sends a short test prompt to the local model and reports its timings.</p><pre class="diagnostics" id="model-test-output" hidden></pre></div>
 </section>
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Optional ChatGPT connection</h2></div></div>
 <p class="muted">This personal key is only needed for a custom GPT Action or a separate iPhone Shortcut. The local server model does not use it. Keep it private; rotating it invalidates the previous key.</p>
@@ -634,6 +635,35 @@ async function checkModel() {
   }
 }
 checkModelButton.addEventListener("click", checkModel);
+const testModelButton = document.getElementById("test-model");
+const modelTestStatus = document.getElementById("model-test-status");
+const modelTestOutput = document.getElementById("model-test-output");
+testModelButton.addEventListener("click", async function () {
+  testModelButton.disabled = true;
+  modelTestStatus.textContent = "Sending a test prompt to Ollama… first run can take a while while the model loads.";
+  modelTestOutput.hidden = true;
+  try {
+    const response = await fetch("{{ url_for('workout_model_test') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": {{ csrf|tojson }},
+                "Accept": "application/json"},
+      body: JSON.stringify({})
+    });
+    const details = await response.json();
+    modelTestOutput.textContent = JSON.stringify(details, null, 2);
+    modelTestOutput.hidden = false;
+    modelTestStatus.textContent = response.ok
+      ? "Test succeeded. Ollama generated a response."
+      : "Test failed: " + (details.error || "unknown error");
+    checkModel();
+  } catch (error) {
+    modelTestStatus.textContent = "Test request failed: " + error.message;
+    modelTestOutput.textContent = error.stack || error.message;
+    modelTestOutput.hidden = false;
+  } finally {
+    testModelButton.disabled = false;
+  }
+});
 checkModel();
 </script>
 </body></html>
@@ -1016,6 +1046,65 @@ def interpret_workout():
         mimetype="application/x-ndjson",
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/workouts/model-test")
+@login_required
+def workout_model_test():
+    if not valid_csrf():
+        return {"error": "Your session expired. Refresh the page and try again."}, 400
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": "Reply with the single word READY.",
+        "stream": False,
+        "keep_alive": "5m",
+        "options": {"temperature": 0, "num_predict": 8},
+    }
+    req = Request(
+        OLLAMA_URL + "/api/generate",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    started = __import__("time").perf_counter()
+    try:
+        with urlopen(req, timeout=300) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        elapsed = __import__("time").perf_counter() - started
+        try:
+            running_models = read_ollama_json("/api/ps").get("models", [])
+            loaded = any(
+                model.get("name") == OLLAMA_MODEL or model.get("model") == OLLAMA_MODEL
+                for model in running_models
+            )
+        except (HTTPError, URLError, TimeoutError):
+            loaded = None
+        return {
+            "ok": True,
+            "model": result.get("model", OLLAMA_MODEL),
+            "response": str(result.get("response", "")).strip(),
+            "elapsed_seconds": round(elapsed, 2),
+            "load_seconds": round(result.get("load_duration", 0) / 1_000_000_000, 2),
+            "prompt_tokens": result.get("prompt_eval_count"),
+            "generated_tokens": result.get("eval_count"),
+            "generation_seconds": round(result.get("eval_duration", 0) / 1_000_000_000, 2),
+            "loaded_after_test": loaded,
+            "done_reason": result.get("done_reason"),
+        }
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace").strip()
+        app.logger.error("Ollama test HTTP error status=%s detail=%s", exc.code, detail[:600])
+        try:
+            detail = str(json.loads(detail).get("error") or detail)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        return {"ok": False, "model": OLLAMA_MODEL, "error": f"Ollama HTTP {exc.code}: {detail[:500]}"}, 502
+    except (URLError, TimeoutError) as exc:
+        app.logger.exception("Ollama model test could not connect")
+        return {"ok": False, "model": OLLAMA_MODEL, "error": f"Could not connect to Ollama: {exc}"}, 503
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        app.logger.exception("Ollama model test response was invalid")
+        return {"ok": False, "model": OLLAMA_MODEL, "error": f"Invalid response from Ollama: {exc}"}, 502
 
 
 @app.get("/workouts/model-status")
