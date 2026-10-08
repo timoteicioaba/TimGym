@@ -133,7 +133,7 @@ def _exercise_name(segment, prescriptions, weights):
 
 
 def parse_workout_note(note):
-    """Return a normalized workout or a clarification message."""
+    """Return a workout draft, retaining identifiable exercises with missing details."""
     text = str(note or "").strip()
     if not text:
         return {"clarification": "Write your workout first."}
@@ -148,57 +148,83 @@ def parse_workout_note(note):
         except ValueError:
             return {"clarification": "That date is invalid. Use YYYY-MM-DD."}
         text = text[:date_match.start()] + " " + text[date_match.end():]
-    elif re.search(r"\byesterday\b", text, re.IGNORECASE):
+    elif re.search(r"\\byesterday\\b", text, re.IGNORECASE):
         workout_date -= timedelta(days=1)
 
     parsed = []
-    unknown = []
     for segment in _split_segments(text):
         prescriptions = _find_prescriptions(segment)
-        if not prescriptions:
-            unknown.append(segment)
-            continue
-        if any(not 1 <= item["sets"] <= 99 or not 1 <= item["reps"] <= 999 for item in prescriptions):
-            unknown.append(segment)
-            continue
-        if any(re.match(r"\s*[-–]\s*\d", segment[item["end"]:]) for item in prescriptions):
-            unknown.append(segment)
-            continue
-
         weights = _weight_matches(segment)
-        # Negative loads (such as assisted pull-ups) need a dedicated schema;
-        # never silently turn them into positive weights.
-        if any(match.groupdict().get("sign") == "-" for match in weights):
-            unknown.append(segment)
+        negative_weight = any(match.groupdict().get("sign") == "-" for match in weights)
+        usable_weights = [] if negative_weight else weights
+        rep_range = _REP_RANGE_RE.search(segment)
+        set_count_match = _SET_COUNT_RE.search(segment)
+
+        if rep_range:
+            set_count = int(rep_range.group("sets"))
+            prescription_spans = [{
+                "start": rep_range.start(), "end": rep_range.end(),
+                "sets": set_count, "reps": None,
+            }]
+            prescriptions_for_name = prescription_spans
+            rows = [{"reps": None, "weight_kg": None} for _ in range(set_count)]
+            missing_fields = ["reps"]
+        elif prescriptions:
+            prescriptions_for_name = prescriptions
+            rows = []
+            missing_fields = []
+            for prescription in prescriptions:
+                weight_match = min(
+                    usable_weights,
+                    key=lambda item: abs(item.start() - prescription["end"]),
+                    default=None,
+                )
+                weight = _weight_kg(weight_match) if weight_match else None
+                rows.extend(
+                    {"reps": prescription["reps"], "weight_kg": weight}
+                    for _ in range(prescription["sets"])
+                )
+        elif set_count_match:
+            set_count = int(set_count_match.group("sets"))
+            prescriptions_for_name = [{
+                "start": set_count_match.start(), "end": set_count_match.end(),
+                "sets": set_count, "reps": None,
+            }]
+            rows = [{"reps": None, "weight_kg": None} for _ in range(set_count)]
+            missing_fields = ["reps"]
+        else:
+            prescriptions_for_name = []
+            rows = []
+            missing_fields = ["sets", "reps"]
+
+        if any(len(rows) > 99 for _ in (0,)):
             continue
-        if len(weights) > 1 and len(weights) != len(prescriptions):
-            unknown.append(segment)
-            continue
-        name = _exercise_name(segment, prescriptions, weights)
+        if not rows and "sets" not in missing_fields:
+            missing_fields.append("sets")
+        if negative_weight:
+            missing_fields.append("weight_kg")
+
+        name = _exercise_name(segment, prescriptions_for_name, weights)
         if not name:
-            unknown.append(segment)
             continue
+        parsed.append({
+            "name": name[0].upper() + name[1:],
+            "notes": (
+                "Enter a positive load or leave it blank for an assisted exercise."
+                if negative_weight else ""
+            ),
+            "sets": rows,
+            "missing_fields": missing_fields,
+        })
 
-        set_rows = []
-        for prescription in prescriptions:
-            weight_match = min(
-                weights,
-                key=lambda item: abs(item.start() - prescription["end"]),
-                default=None,
-            )
-            weight = _weight_kg(weight_match) if weight_match else None
-            set_rows.extend(
-                {"reps": prescription["reps"], "weight_kg": weight}
-                for _ in range(prescription["sets"])
-            )
-        parsed.append({"name": name[0].upper() + name[1:], "notes": "", "sets": set_rows})
-
-    if unknown:
-        example = "Try “Squat 3x5 @ 80 kg” or “Bench press: 3 sets of 8 at 60 lb”."
-        return {"clarification": f"I couldn’t confidently parse: {unknown[0]}. {example}"}
-    if not parsed:
-        return {"clarification": "Add an exercise name and its sets and reps. Try “Squat 3x5 @ 80 kg”."}
     if len(parsed) > 30:
         return {"clarification": "Log up to 30 exercises at a time."}
+    if not parsed:
+        return {"clarification": "I couldn’t identify an exercise. Add its name and any details you know."}
 
-    return {"workout": {"date": workout_date.isoformat(), "exercises": parsed}}
+    return {
+        "workout": {
+            "date": workout_date.isoformat(),
+            "exercises": parsed,
+        }
+    }
