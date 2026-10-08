@@ -208,21 +208,75 @@ def api_key_required(view):
 
 BASE_STYLE = """
 <style>
-:root{color-scheme:light;--ink:#17231f;--muted:#62716a;--line:#dce5df;--green:#176b4b;--pale:#edf5ef}
-*{box-sizing:border-box}body{margin:0;background:#f5f7f4;color:var(--ink);font:16px/1.45 system-ui,sans-serif}
-header{background:#102b20;color:white;padding:20px max(18px,calc((100vw - 980px)/2));display:flex;justify-content:space-between;align-items:center;gap:14px}
-header h1{margin:0;font-size:1.5rem}header p{margin:3px 0 0;color:#c7d8cd}.nav{display:flex;align-items:center;gap:12px}.nav a{color:#fff}
-main{max-width:980px;padding:22px 18px 48px;margin:auto}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
-.card{background:white;border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 2px 8px #122b2010}.wide{grid-column:1/-1}
-h2{font-size:1.12rem;margin:0 0 15px}label{display:block;color:var(--muted);font-size:.85rem;margin:0 0 5px}
-input{width:100%;min-height:42px;border:1px solid #cbd7cf;border-radius:8px;padding:9px 10px;font:inherit;color:var(--ink);background:white}
-input:focus{outline:2px solid #a8d4ba;border-color:var(--green)}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
-.fields.three{grid-template-columns:repeat(3,minmax(0,1fr))}button{border:0;border-radius:8px;padding:11px 16px;color:white;background:var(--green);font:600 1rem system-ui;cursor:pointer}
-button:hover{background:#105438}.muted{color:var(--muted);font-size:.9rem}.flash{padding:10px 12px;border-radius:8px;background:var(--pale);margin:0 0 14px}
-.record{padding:12px 0;border-top:1px solid var(--line)}.record:first-of-type{border-top:0;padding-top:0}.record strong{display:block}.record small{color:var(--muted)}
-.chart{width:100%;height:auto;min-height:160px}.chart text{fill:var(--muted);font:12px system-ui}.empty{padding:12px;color:var(--muted);background:#f6f8f6;border-radius:8px}
-code,pre{overflow-wrap:anywhere}pre{white-space:pre-wrap;background:#f6f8f6;padding:12px;border-radius:8px}
-@media(max-width:700px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.fields.three{grid-template-columns:repeat(2,minmax(0,1fr))}header{align-items:flex-start;flex-direction:column}}
+:root{color-scheme:dark;--bg:#090d0b;--surface:#111815;--surface-2:#17201b;--line:#26322b;--text:#f2f6f1;--muted:#9ba99f;--accent:#c7f36a;--accent-dim:#29371d;--blue:#a6d7ff}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,#1c2a1f 0%,transparent 48%),var(--bg);color:var(--text);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.topbar{max-width:600px;margin:0 auto;padding:18px 20px 10px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:10px;font-size:1.08rem;font-weight:750;letter-spacing:-.03em}
+.brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:12px;background:var(--accent);color:#15200b;font-weight:900;font-size:1.05rem}
+.user-chip{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:7px 12px;color:#d9e2db;font-size:.82rem}
+.app-shell{max-width:600px;margin:0 auto;padding:18px 18px calc(105px + env(safe-area-inset-bottom))}
+.welcome{padding:18px 3px 22px}
+.eyebrow{color:var(--accent);font-size:.72rem;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+.welcome h1{font-size:clamp(2rem,9vw,2.75rem);line-height:1.02;letter-spacing:-.065em;margin:10px 0 9px}
+.welcome p{margin:0;color:var(--muted);font-size:.96rem}
+.stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-bottom:14px}
+.stat-card,.panel{background:linear-gradient(145deg,#141c17,#101613 78%);border:1px solid var(--line);border-radius:20px;box-shadow:0 12px 32px #00000022}
+.stat-card{padding:17px 16px;min-height:125px;position:relative;overflow:hidden}
+.stat-card:after{content:"";position:absolute;width:88px;height:88px;right:-32px;top:-32px;border-radius:50%;background:#c7f36a0c}
+.stat-label{color:var(--muted);font-size:.76rem;font-weight:650;letter-spacing:.04em}
+.stat-value{font-size:1.8rem;line-height:1.12;letter-spacing:-.06em;font-weight:760;margin:12px 0 5px}
+.stat-unit{font-size:.85rem;color:var(--muted);font-weight:500;letter-spacing:0}
+.stat-note{font-size:.78rem;color:var(--muted)}
+.panel{padding:19px;margin:12px 0}
+.panel-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.panel h2{font-size:1.03rem;letter-spacing:-.025em;margin:0}
+.panel-kicker{font-size:.74rem;color:var(--muted)}
+.panel-title-mark{display:flex;align-items:center;gap:9px}
+.panel-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px #c7f36a65}
+.chart{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--muted);font:11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.chart-grid{stroke:#29352e;stroke-dasharray:3 5}
+.chart-line{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.chart-point{fill:var(--accent);stroke:#111815;stroke-width:2}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:13px}
+.fields.three{grid-template-columns:repeat(2,minmax(0,1fr))}
+label{display:block;color:var(--muted);font-size:.78rem;font-weight:600;margin:0 0 6px}
+input{width:100%;min-height:48px;border:1px solid #344239;border-radius:12px;padding:10px 12px;font:inherit;color:var(--text);background:#0b100d}
+input::placeholder{color:#65736a}
+input:focus{outline:2px solid #c7f36a88;border-color:var(--accent)}
+button{min-height:48px;border:0;border-radius:13px;padding:11px 17px;color:#16200c;background:var(--accent);font:700 .94rem -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+button:hover{filter:brightness(1.06)}
+button.secondary{background:#202b24;color:var(--text);border:1px solid #344239}
+.full-button{width:100%}
+.muted{color:var(--muted);font-size:.85rem}
+.flash{padding:12px 14px;border-radius:12px;background:#24331c;border:1px solid #455c2e;color:#e4f6c8;margin:0 0 14px}
+.record{display:flex;gap:12px;align-items:flex-start;padding:13px 0;border-top:1px solid #253029}
+.record:first-of-type{border-top:0;padding-top:0}
+.record-icon{flex:0 0 34px;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--accent-dim);color:var(--accent);font-size:.85rem;font-weight:800}
+.record-main{min-width:0;flex:1}
+.record strong{display:block;font-size:.92rem;font-weight:680;overflow-wrap:anywhere}
+.record small{display:block;color:var(--muted);font-size:.77rem;margin-top:3px}
+.empty{padding:14px;border-radius:12px;color:var(--muted);background:#0c120f;font-size:.87rem}
+.panel details summary{list-style:none;display:flex;justify-content:space-between;align-items:center;cursor:pointer;min-height:30px;font-weight:700}
+.panel details summary::-webkit-details-marker{display:none}
+.panel details summary:after{content:"＋";color:var(--accent);font-size:1.2rem}
+.panel details[open] summary:after{content:"−"}
+.panel details summary span{color:var(--muted);font-size:.8rem;font-weight:500}
+.key-box{overflow-wrap:anywhere;background:#0b100d;border:1px solid var(--line);border-radius:12px;padding:13px;color:var(--accent);font: .85rem ui-monospace,monospace}
+.flash + .key-box{margin-top:10px}
+.bottom-nav{position:fixed;z-index:10;left:50%;transform:translateX(-50%);bottom:0;width:min(100%,600px);padding:9px 12px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:#0c110feF;border-top:1px solid #28342d;backdrop-filter:blur(18px)}
+.bottom-nav a{display:flex;min-height:48px;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#9eaaa2;font-size:.68rem}
+.bottom-nav a:before{font-size:1.05rem;line-height:1.15;color:var(--accent)}
+.bottom-nav a:nth-child(1):before{content:"⌂"}.bottom-nav a:nth-child(2):before{content:"⌁"}.bottom-nav a:nth-child(3):before{content:"＋"}.bottom-nav a:nth-child(4):before{content:"◉"}
+.login-shell{max-width:440px;margin:20px auto}
+.login-shell .panel{padding:22px}
+.login-title{font-size:1.55rem;letter-spacing:-.05em;margin:0 0 6px}
+@media(min-width:760px){.app-shell{padding-top:28px}.welcome{padding-top:30px}.stats-grid{gap:14px}.panel{padding:22px}.bottom-nav{bottom:18px;border:1px solid #28342d;border-radius:18px;padding-bottom:9px}}
+@media(max-width:380px){.app-shell{padding-left:14px;padding-right:14px}.panel{padding:16px}.stat-card{padding:15px 13px}.stat-value{font-size:1.55rem}}
 </style>
 """
 
@@ -238,35 +292,78 @@ LOGIN_PAGE = """
 """
 
 DASHBOARD = """
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TimGym</title>""" + BASE_STYLE + """</head>
-<body><header><div><h1>TimGym</h1><p>Personal training log</p></div><nav class="nav"><span>{{ user.username }}</span><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button type="submit">Sign out</button></form></nav></header>
-<main>{% for message in get_flashed_messages() %}<p class="flash">{{ message }}</p>{% endfor %}
-{% if new_api_key %}<article class="card wide" style="margin-bottom:18px"><h2>Your new ChatGPT API key</h2><p>Copy this now. It will not be shown again. Keep it private.</p><pre>{{ new_api_key }}</pre></article>{% endif %}
-<section class="grid">
-<article class="card"><h2>Record measurements</h2><form method="post" action="{{ url_for('add_measurement') }}"><input type="hidden" name="_csrf" value="{{ csrf }}">
-<div class="fields"><div><label for="measured_on">Date</label><input id="measured_on" name="measured_on" type="date" value="{{ today }}" required></div>
-<div><label for="weight">Body weight (kg)</label><input id="weight" name="weight_kg" type="number" min="1" max="1000" step="0.1" required></div></div>
-<div class="fields three"><div><label for="body_fat">Body fat (%)</label><input id="body_fat" name="body_fat_pct" type="number" min="0" max="100" step="0.1"></div>
-<div><label for="waist">Waist (cm)</label><input id="waist" name="waist_cm" type="number" min="1" max="500" step="0.1"></div>
-<div><label for="chest">Chest (cm)</label><input id="chest" name="chest_cm" type="number" min="1" max="500" step="0.1"></div></div>
-<div style="margin-bottom:12px"><label for="hips">Hips (cm)</label><input id="hips" name="hips_cm" type="number" min="1" max="500" step="0.1"></div>
-<button type="submit">Save measurements</button></form></article>
-<article class="card"><h2>Workout logging</h2><p>Log workouts by telling ChatGPT what you did. Workout entry is not available on this website.</p>
-<p class="muted">To connect ChatGPT, create your personal API key below, then add the TimGym Action using the OpenAPI file in the project README.</p>
-<form method="post" action="{{ url_for('create_api_key') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button type="submit">Create or rotate ChatGPT key</button></form>
-<p class="muted"><a href="{{ url_for('openapi_spec') }}">Download the ChatGPT Action OpenAPI file</a></p></article>
-<article class="card wide"><h2>Body-weight trend</h2>
-{% if chart_points %}<svg class="chart" viewBox="0 0 700 210" role="img" aria-label="Body weight trend chart">
-<line x1="48" y1="170" x2="680" y2="170" stroke="#dce5df"/><line x1="48" y1="25" x2="48" y2="170" stroke="#dce5df"/>
-<text x="4" y="30">{{ chart_max }} kg</text><text x="4" y="170">{{ chart_min }} kg</text>
-<polyline fill="none" stroke="#176b4b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="{{ chart_polyline }}"/>
-{% for point in chart_points %}<circle cx="{{ point.x }}" cy="{{ point.y }}" r="4" fill="#176b4b"><title>{{ point.date }}: {{ point.weight }} kg</title></circle>{% endfor %}
-<text x="48" y="198">{{ chart_points[0].date }}</text><text x="620" y="198">{{ chart_points[-1].date }}</text></svg>
-{% else %}<p class="empty">Add a body measurement to see your trend.</p>{% endif %}</article>
-<article class="card"><h2>Recent workouts</h2>{% for row in workouts %}<div class="record"><strong>{{ row.exercise }} · {{ row.sets }} sets · {{ row.set_summary }}</strong><small>{{ row.workout_date }}{% if row.notes %} · {{ row.notes }}{% endif %}</small></div>{% else %}<p class="empty">No workouts recorded yet. Ask ChatGPT to log one.</p>{% endfor %}</article>
-<article class="card"><h2>Recent measurements</h2>{% for row in measurements %}<div class="record"><strong>{{ "%.1f"|format(row.weight_kg) }} kg{% if row.body_fat_pct is not none %} · {{ "%.1f"|format(row.body_fat_pct) }}% body fat{% endif %}</strong>
-<small>{{ row.measured_on }}{% for label, value in [('Waist',row.waist_cm),('Chest',row.chest_cm),('Hips',row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</small></div>{% else %}<p class="empty">No measurements recorded yet.</p>{% endfor %}</article>
-</section></main></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090d0b"><title>TimGym</title>""" + BASE_STYLE + """</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">T</span><span>TimGym</span></div>
+  <div class="user-chip">{{ user.username }}</div>
+</header>
+<main id="top" class="app-shell">
+{% for message in get_flashed_messages() %}<p class="flash">{{ message }}</p>{% endfor %}
+{% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new ChatGPT key</h2></div><p class="muted">Copy it now; it is only shown once.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
+<section class="welcome">
+  <div class="eyebrow">{{ today_label }}</div>
+  <h1>Your training,<br>in one place.</h1>
+  <p>A clear look at your consistency and progress.</p>
+</section>
+<section class="stats-grid" aria-label="Your training at a glance">
+  <article class="stat-card"><div class="stat-label">BODY WEIGHT</div>
+    <div class="stat-value">{% if latest_weight is not none %}{{ "%.1f"|format(latest_weight) }}<span class="stat-unit"> kg</span>{% else %}—{% endif %}</div>
+    <div class="stat-note">{% if weight_change is not none %}{% if weight_change > 0 %}+{% endif %}{{ "%.1f"|format(weight_change) }} kg since last check-in{% else %}Your latest check-in{% endif %}</div>
+  </article>
+  <article class="stat-card"><div class="stat-label">WORKOUTS · 7 DAYS</div>
+    <div class="stat-value">{{ week_count }}</div><div class="stat-note">{% if week_count == 1 %}session logged{% else %}sessions logged{% endif %}</div>
+  </article>
+</section>
+<section class="panel" id="trends">
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Weight trend</h2></div><span class="panel-kicker">Recent check-ins</span></div>
+  {% if chart_points %}
+  <svg class="chart" viewBox="0 0 700 210" role="img" aria-label="Body weight trend chart">
+    <line class="chart-grid" x1="48" y1="50" x2="680" y2="50"/><line class="chart-grid" x1="48" y1="108" x2="680" y2="108"/><line class="chart-grid" x1="48" y1="166" x2="680" y2="166"/>
+    <text x="2" y="54">{{ chart_max }} kg</text><text x="2" y="170">{{ chart_min }} kg</text>
+    <polyline class="chart-line" points="{{ chart_polyline }}"/>
+    {% for point in chart_points %}<circle class="chart-point" cx="{{ point.x }}" cy="{{ point.y }}" r="4"><title>{{ point.date }} · {{ "%.1f"|format(point.weight) }} kg</title></circle>{% endfor %}
+    <text x="48" y="198">{{ chart_points[0].date }}</text><text x="620" y="198">{{ chart_points[-1].date }}</text>
+  </svg>
+  {% else %}<p class="empty">Your trend will appear after your first body-weight check-in.</p>{% endif %}
+</section>
+<section class="panel" id="log">
+  <details>
+    <summary>Log a body check-in <span>Weight, body fat, measurements</span></summary>
+    <form method="post" action="{{ url_for('add_measurement') }}" style="margin-top:18px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="fields"><div><label for="measured_on">DATE</label><input id="measured_on" name="measured_on" type="date" value="{{ today }}" required></div>
+      <div><label for="weight">BODY WEIGHT · KG</label><input id="weight" name="weight_kg" type="number" min="1" max="1000" step="0.1" placeholder="82.4" required></div></div>
+      <div class="fields three"><div><label for="body_fat">BODY FAT · %</label><input id="body_fat" name="body_fat_pct" type="number" min="0" max="100" step="0.1" placeholder="Optional"></div>
+      <div><label for="waist">WAIST · CM</label><input id="waist" name="waist_cm" type="number" min="1" max="500" step="0.1" placeholder="Optional"></div>
+      <div><label for="chest">CHEST · CM</label><input id="chest" name="chest_cm" type="number" min="1" max="500" step="0.1" placeholder="Optional"></div></div>
+      <div style="margin-bottom:14px"><label for="hips">HIPS · CM</label><input id="hips" name="hips_cm" type="number" min="1" max="500" step="0.1" placeholder="Optional"></div>
+      <button class="full-button" type="submit">Save check-in</button>
+    </form>
+  </details>
+</section>
+<section class="panel" id="activity">
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Recent workouts</h2></div><span class="panel-kicker">Via ChatGPT</span></div>
+  {% for row in workouts %}<div class="record"><span class="record-icon">↗</span><div class="record-main"><strong>{{ row.exercise }} <span class="muted">· {{ row.sets }} sets</span></strong><small>{{ row.set_summary }} · {{ row.workout_date }}{% if row.notes %} · {{ row.notes }}{% endif %}</small></div></div>
+  {% else %}<p class="empty">Your workouts will show here after ChatGPT logs them.</p>{% endfor %}
+</section>
+<section class="panel" id="account">
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>ChatGPT connection</h2></div></div>
+  <p class="muted">Use a private key to connect your account to ChatGPT or an iPhone Shortcut. Keep it private.</p>
+  <form method="post" action="{{ url_for('create_api_key') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">Create or rotate personal key</button></form>
+  <p class="panel-kicker" style="margin:12px 0 0"><a href="{{ url_for('openapi_spec') }}">Action API specification</a></p>
+</section>
+<section class="panel">
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Body measurements</h2></div><span class="panel-kicker">Latest</span></div>
+  {% for row in measurements %}<div class="record"><span class="record-icon">◎</span><div class="record-main"><strong>{{ "%.1f"|format(row.weight_kg) }} kg{% if row.body_fat_pct is not none %} <span class="muted">· {{ "%.1f"|format(row.body_fat_pct) }}% fat</span>{% endif %}</strong><small>{{ row.measured_on }}{% for label, value in [('Waist',row.waist_cm),('Chest',row.chest_cm),('Hips',row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</small></div></div>
+  {% else %}<p class="empty">No check-ins yet. Add one above when you're ready.</p>{% endfor %}
+</section>
+<form method="post" action="{{ url_for('logout') }}" style="padding:0 2px"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">Sign out</button></form>
+</main>
+<nav class="bottom-nav" aria-label="Main navigation">
+<a href="#top">Home</a><a href="#trends">Trends</a><a href="#log">Log</a><a href="#account">Account</a>
+</nav>
+</body></html>
 """
 
 
@@ -340,8 +437,19 @@ def index():
     else:
         chart_min = chart_max = None
         polyline = ""
+    latest_weight = measurements[0]["weight_kg"] if measurements else None
+    weight_change = (
+        measurements[0]["weight_kg"] - measurements[1]["weight_kg"]
+        if len(measurements) > 1 else None
+    )
+    week_count = db.execute(
+        "SELECT COUNT(*) FROM workouts WHERE user_id = ? AND workout_date >= date('now', '-6 days')",
+        (g.user["id"],),
+    ).fetchone()[0]
     return render_template_string(
         DASHBOARD, user=g.user, csrf=csrf_token(), new_api_key=None, today=date.today().isoformat(),
+        today_label=date.today().strftime("%A · %B %d"),
+        latest_weight=latest_weight, weight_change=weight_change, week_count=week_count,
         workouts=workouts, measurements=measurements, chart_points=chart_points,
         chart_min=chart_min, chart_max=chart_max, chart_polyline=polyline,
     )
@@ -386,6 +494,8 @@ def create_api_key():
     db.commit()
     return render_template_string(
         DASHBOARD, user=g.user, csrf=csrf_token(), new_api_key=token, today=date.today().isoformat(),
+        today_label=date.today().strftime("%A · %B %d"),
+        latest_weight=None, weight_change=None, week_count=0,
         workouts=[], measurements=[], chart_points=[], chart_min=None, chart_max=None, chart_polyline="",
     )
 
