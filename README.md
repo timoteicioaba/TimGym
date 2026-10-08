@@ -1,23 +1,64 @@
 # TimGym
 
-A small self-hosted personal gym log for workouts and body measurements.
+A self-hosted personal workout and body-measurement tracker. Each account has private data.
 
-## Run with Docker Compose
+## Deploy or update on CasaOS
 
-1. Copy this repository to your CasaOS server.
-2. From the project folder, run `docker compose up -d --build`.
-3. Open `http://<server-ip>:8000`.
+From the folder containing `compose.yaml`, run:
 
-SQLite data is stored in the `gym_data` Docker volume and survives container restarts.
+```sh
+docker compose up -d --build
+```
 
-## First version
+Open `https://gym.tim0tei.fun` (or your server address).
 
-- Log workouts by date, exercise, sets, reps, and weight.
-- Record body weight, body-fat percentage, and optional waist, chest, and hip measurements.
-- Review recent entries and a body-weight trend chart.
+## Create accounts
 
-This initial version has no login. Keep it on a trusted network; add authentication before exposing it publicly. Apple Health sync and ChatGPT/MCP integration are planned for later.
+There is no public signup. Create each account from the CasaOS terminal:
 
-## Configuration
+```sh
+docker compose exec timgym python app.py create-user <username>
+```
 
-Set `PORT` to change the host port (default `8000`). The container listens on port `8000`.
+Enter and confirm a password of at least 12 characters when prompted. Create one account for each person. Existing workouts and measurements from the first version are assigned to the first account you create; each later account sees only its own records.
+
+To list accounts:
+
+```sh
+docker compose exec timgym python app.py list-users
+```
+
+## Use ChatGPT to log workouts
+
+Workout entry is available through the authenticated API, not the website.
+
+1. Sign in to TimGym and choose **Create or rotate ChatGPT key**. Copy the key; it is shown only once. Rotating it invalidates the previous key.
+2. Create a private ChatGPT GPT Action for that user and import `openapi.yaml` from this repository.
+3. Set the Action authentication to **API Key**, using **Bearer** authentication, and paste that user's TimGym key.
+4. In the Action instructions, tell ChatGPT to confirm the date, exercises, sets, reps, and weights with the user before calling `logWorkout`.
+
+The API key grants access only to that person's workouts. Do not share it. The Action can log workouts and read recent workout history; body measurements remain in the signed-in website.
+
+### Example workout request
+
+```json
+{
+  "date": "2026-10-08",
+  "exercises": [
+    {
+      "name": "Squat",
+      "sets": [
+        { "reps": 5, "weight_kg": 100, "rpe": 7 },
+        { "reps": 5, "weight_kg": 100, "rpe": 8 }
+      ]
+    }
+  ]
+}
+```
+
+## Data and security
+
+- SQLite is stored in the persistent `gym_data` Docker volume.
+- Use a unique, long `SECRET_KEY` in your deployment environment if you manage environment variables. If omitted, TimGym generates a random session key and stores it in the data volume.
+- The site uses secure, HTTP-only, same-site session cookies and CSRF protection.
+- Back up the `gym_data` volume. Do not expose or share account passwords or ChatGPT API keys.
