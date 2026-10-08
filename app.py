@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 import sys
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from functools import wraps
 from getpass import getpass
 from pathlib import Path
@@ -20,7 +20,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=True,
-    PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 14,
+    PERMANENT_SESSION_LIFETIME=timedelta(days=14),
 )
 
 
