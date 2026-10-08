@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from flask import Flask, abort, flash, g, redirect, render_template_string, request, send_file, session, url_for
+from flask import Flask, Response, abort, flash, g, redirect, render_template_string, request, send_file, session, stream_with_context, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", "data/timgym.db"))
@@ -283,6 +283,8 @@ a:hover{text-decoration:underline}
 .chart-point.range-1{fill:#c7f36a}.chart-point.range-2{fill:#75c8ff}.chart-point.range-3{fill:#c69cff}
 .lift-trends{display:grid;gap:14px}.lift-card{padding:14px;border:1px solid #28342d;border-radius:15px;background:#0c120f}.lift-card h3{margin:0;font-size:.96rem;letter-spacing:-.02em}.range-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 0;color:var(--muted);font-size:.72rem}.range-legend span{display:flex;align-items:center;gap:5px}.legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-dot.range-1{background:#c7f36a}.legend-dot.range-2{background:#75c8ff}.legend-dot.range-3{background:#c69cff}
 .workout-preview{margin-top:14px;padding:14px;border:1px solid #3a4b3d;border-radius:14px;background:#0b100d}.workout-preview h3{margin:0 0 10px;font-size:.95rem}.preview-exercise{padding:10px 0;border-top:1px solid #253029}.preview-exercise:first-child{border-top:0;padding-top:0}.preview-exercise strong{display:block}.preview-exercise small{display:block;color:var(--muted);margin-top:4px}
+.model-progress{height:5px;margin-top:12px;border-radius:999px;background:#253029;overflow:hidden}.model-progress span{display:block;width:35%;height:100%;border-radius:999px;background:var(--accent);animation:model-progress-slide 1.2s ease-in-out infinite alternate}@keyframes model-progress-slide{from{transform:translateX(0)}to{transform:translateX(185%)}}
+.diagnostics{margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;padding:12px;border-radius:12px;background:#0b100d;color:#d5e2d7;font:.77rem/1.45 ui-monospace,monospace}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:13px}
 .fields.three{grid-template-columns:repeat(2,minmax(0,1fr))}
 label{display:block;color:var(--muted);font-size:.78rem;font-weight:600;margin:0 0 6px}
@@ -396,6 +398,7 @@ DASHBOARD = """
     <div id="workout-preview-content"></div>
     <button class="full-button" id="save-workout" type="button" style="margin-top:12px">Save workout</button>
   </div>
+  <div class="model-progress" id="model-progress" hidden aria-hidden="true"><span></span></div>
   <p class="panel-kicker" id="workout-ai-status" role="status" aria-live="polite" style="margin:10px 0 0">Your note is interpreted by the private model running on this server.</p>
   <p class="panel-kicker" style="margin:8px 0 0"><a href="{{ url_for('connection') }}">Model and connection settings</a></p>
 </section>
@@ -434,6 +437,7 @@ const csrfToken = {{ csrf|tojson }};
 let pendingWorkout = null;
 const noteField = document.getElementById("workout-note");
 const status = document.getElementById("workout-ai-status");
+const progress = document.getElementById("model-progress");
 const preview = document.getElementById("workout-preview");
 const previewContent = document.getElementById("workout-preview-content");
 const previewDate = document.getElementById("workout-preview-date");
@@ -449,18 +453,43 @@ interpretButton.addEventListener("click", async function () {
   interpretButton.disabled = true;
   saveButton.disabled = true;
   preview.hidden = true;
+  progress.hidden = false;
   pendingWorkout = null;
-  status.textContent = "Interpreting on your server…";
+  status.textContent = "Connecting to the local model…";
   try {
     const response = await fetch("{{ url_for('interpret_workout') }}", {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
       body: JSON.stringify({note: note})
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Could not interpret this workout.");
-    if (result.clarification) {
-      status.textContent = result.clarification + " Add the missing details and try again.";
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Could not interpret this workout.");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result = null;
+    const handleEvent = function (line) {
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (event.type === "progress") status.textContent = event.message;
+      if (event.type === "error") throw new Error(event.error);
+      if (event.type === "result") result = event;
+      if (event.type === "clarification") result = event;
+    };
+    while (true) {
+      const part = await reader.read();
+      buffer += decoder.decode(part.value || new Uint8Array(), {stream: !part.done});
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) handleEvent(line);
+      if (part.done) break;
+    }
+    if (buffer.trim()) handleEvent(buffer);
+    if (!result) throw new Error("The model connection ended before a result arrived. Check diagnostics on the Connection page.");
+    if (result.type === "clarification") {
+      status.textContent = result.message + " Add the missing details and try again.";
       return;
     }
     pendingWorkout = result.workout;
@@ -489,6 +518,7 @@ interpretButton.addEventListener("click", async function () {
   } catch (error) {
     status.textContent = error.message;
   } finally {
+    progress.hidden = true;
     interpretButton.disabled = false;
   }
 });
@@ -802,10 +832,14 @@ def persist_workout(workout_date, exercises, user_id):
     return {"workout_id": session_id, "date": workout_date, "exercises_saved": len(rows)}
 
 
-def interpret_workout_note(note):
+def ndjson_event(event):
+    return json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+
+def workout_model_request(note, request_id):
     payload = {
         "model": OLLAMA_MODEL,
-        "stream": False,
+        "stream": True,
         "format": WORKOUT_RESPONSE_SCHEMA,
         "options": {"temperature": 0},
         "messages": [
@@ -826,34 +860,71 @@ def interpret_workout_note(note):
             {"role": "user", "content": note},
         ],
     }
-    body = json.dumps(payload).encode("utf-8")
     req = Request(
         OLLAMA_URL + "/api/chat",
-        data=body,
+        data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urlopen(req, timeout=180) as response:
-        result = json.loads(response.read().decode("utf-8"))
-    content = result.get("message", {}).get("content", "")
-    parsed = json.loads(content)
-    if not isinstance(parsed, dict):
-        raise ValueError("The local model did not return a workout object.")
-    clarification = str(parsed.get("clarification") or "").strip()
-    if clarification:
-        return {"clarification": clarification}
-    workout_date, exercises = normalize_workout_payload(parsed)
-    clean_exercises = []
-    for exercise in exercises:
-        clean_exercises.append({
-            "name": exercise["name"],
-            "notes": exercise["notes"],
-            "sets": [
-                {"reps": one["reps"], "weight_kg": one["weight_kg"]}
-                for one in exercise["sets"]
-            ],
-        })
-    return {"workout": {"date": workout_date, "exercises": clean_exercises}}
+    chunks = []
+    update_count = 0
+    yield {"type": "progress", "message": "Connecting to Ollama…"}
+    try:
+        with urlopen(req, timeout=180) as response:
+            yield {"type": "progress", "message": "Model connected. Loading or generating the workout…"}
+            for raw_line in response:
+                if not raw_line.strip():
+                    continue
+                chunk = json.loads(raw_line.decode("utf-8"))
+                text = chunk.get("message", {}).get("content", "")
+                if text:
+                    chunks.append(text)
+                    update_count += 1
+                    if update_count == 1 or update_count % 8 == 0:
+                        yield {
+                            "type": "progress",
+                            "message": f"Generating workout structure… {update_count} model updates received.",
+                        }
+        parsed = json.loads("".join(chunks))
+        if not isinstance(parsed, dict):
+            raise ValueError("The local model did not return a workout object.")
+        clarification = str(parsed.get("clarification") or "").strip()
+        if clarification:
+            yield {"type": "clarification", "message": clarification}
+            return
+        workout_date, exercises = normalize_workout_payload(parsed)
+        clean_exercises = []
+        for exercise in exercises:
+            clean_exercises.append({
+                "name": exercise["name"],
+                "notes": exercise["notes"],
+                "sets": [
+                    {"reps": one["reps"], "weight_kg": one["weight_kg"]}
+                    for one in exercise["sets"]
+                ],
+            })
+        yield {"type": "result", "workout": {"date": workout_date, "exercises": clean_exercises}}
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace").strip()
+        app.logger.error("Ollama HTTP error request_id=%s status=%s detail=%s", request_id, exc.code, detail[:600])
+        try:
+            detail_json = json.loads(detail)
+            detail = str(detail_json.get("error") or detail)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        yield {"type": "error", "error": f"Ollama returned HTTP {exc.code}: {detail[:500]}", "request_id": request_id}
+    except (URLError, TimeoutError) as exc:
+        app.logger.exception("Ollama connection failed request_id=%s", request_id)
+        yield {"type": "error", "error": f"Could not connect to Ollama: {exc}", "request_id": request_id}
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        app.logger.exception("Workout model response was invalid request_id=%s", request_id)
+        yield {"type": "error", "error": f"Model response could not be parsed: {exc}", "request_id": request_id}
+
+
+def read_ollama_json(path, timeout=4):
+    req = Request(OLLAMA_URL + path, headers={"Accept": "application/json"})
+    with urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 @app.post("/workouts/interpret")
@@ -867,16 +938,49 @@ def interpret_workout():
         return {"error": "Write a workout first."}, 400
     if len(note) > 4000:
         return {"error": "Keep the workout note under 4,000 characters."}, 400
+    request_id = secrets.token_hex(4)
+    app.logger.info("Starting local workout interpretation request_id=%s model=%s", request_id, OLLAMA_MODEL)
+    return Response(
+        stream_with_context(
+            (ndjson_event(event) for event in workout_model_request(note, request_id))
+        ),
+        mimetype="application/x-ndjson",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/workouts/model-status")
+@login_required
+def workout_model_status():
     try:
-        return interpret_workout_note(note)
-    except HTTPError:
-        return {"error": "The local model could not process that workout. Try again shortly."}, 502
-    except (URLError, TimeoutError):
-        return {"error": "The local model is starting or unavailable. Wait a little and try again."}, 503
-    except json.JSONDecodeError:
-        return {"error": "The local model returned invalid JSON. Try again."}, 502
-    except (ValueError, TypeError) as exc:
-        return {"error": str(exc)}, 422
+        tags = read_ollama_json("/api/tags")
+        models = tags.get("models", [])
+        installed = any(
+            model.get("name") == OLLAMA_MODEL or model.get("model") == OLLAMA_MODEL
+            for model in models
+        )
+        try:
+            running = read_ollama_json("/api/ps").get("models", [])
+        except HTTPError:
+            running = []
+        loaded = any(
+            model.get("name") == OLLAMA_MODEL or model.get("model") == OLLAMA_MODEL
+            for model in running
+        )
+        return {
+            "reachable": True,
+            "model": OLLAMA_MODEL,
+            "installed": installed,
+            "loaded": loaded,
+            "runtime": "CPU",
+            "checked_at": __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds"),
+            "hint": None if installed else "Model is not downloaded yet. Check the timgym-ollama-model container logs.",
+        }
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        return {"reachable": False, "model": OLLAMA_MODEL, "error": f"Ollama HTTP {exc.code}: {detail}"}, 502
+    except (URLError, TimeoutError) as exc:
+        return {"reachable": False, "model": OLLAMA_MODEL, "error": f"Cannot connect to local Ollama: {exc}"}, 503
 
 
 @app.post("/workouts/save")
