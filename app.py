@@ -566,6 +566,7 @@ CONNECTION_PAGE = """
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Local workout model</h2></div></div>
 <p class="muted">TimGym uses Qwen 3.5 2B through Ollama on this server. The workout note is interpreted on your CasaOS machine; it is saved only after you review and confirm it. No ChatGPT or OpenAI API is used for this flow.</p>
 <p class="panel-kicker">Model: qwen3.5:2b · CPU inference · first setup downloads about 3 GB</p>
+<div style="margin-top:14px"><button class="secondary full-button" id="check-model" type="button">Check model status</button><p class="panel-kicker" id="model-status-text" role="status" aria-live="polite" style="margin:10px 0 0">Checking local model…</p><pre class="diagnostics" id="model-diagnostics" hidden></pre></div>
 </section>
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Optional ChatGPT connection</h2></div></div>
 <p class="muted">This personal key is only needed for a custom GPT Action or a separate iPhone Shortcut. The local server model does not use it. Keep it private; rotating it invalidates the previous key.</p>
@@ -575,6 +576,34 @@ CONNECTION_PAGE = """
 <a class="muted" href="{{ url_for('index') }}">← Back to training</a>
 </main>
 <nav class="bottom-nav" aria-label="Main navigation"><a href="{{ url_for('index') }}">Home</a><a href="{{ url_for('index') }}#lifts">Progress</a><a href="{{ url_for('index') }}#workout-log">Log</a><a href="{{ url_for('connection') }}">Connect</a></nav>
+<script>
+const modelStatusText = document.getElementById("model-status-text");
+const modelDiagnostics = document.getElementById("model-diagnostics");
+const checkModelButton = document.getElementById("check-model");
+async function checkModel() {
+  checkModelButton.disabled = true;
+  modelStatusText.textContent = "Checking Ollama and the model…";
+  modelDiagnostics.hidden = true;
+  try {
+    const response = await fetch("{{ url_for('workout_model_status') }}", {headers: {"Accept": "application/json"}});
+    const details = await response.json();
+    modelDiagnostics.textContent = JSON.stringify(details, null, 2);
+    modelDiagnostics.hidden = false;
+    if (!response.ok || !details.reachable) modelStatusText.textContent = details.error || "Ollama is not reachable.";
+    else if (!details.installed) modelStatusText.textContent = "Ollama is online, but the model is not downloaded yet.";
+    else if (!details.loaded) modelStatusText.textContent = "Model is installed and ready; it loads when you interpret a workout.";
+    else modelStatusText.textContent = "Ollama and the model are online and loaded.";
+  } catch (error) {
+    modelStatusText.textContent = "Could not read model status: " + error.message;
+    modelDiagnostics.textContent = error.stack || error.message;
+    modelDiagnostics.hidden = false;
+  } finally {
+    checkModelButton.disabled = false;
+  }
+}
+checkModelButton.addEventListener("click", checkModel);
+checkModel();
+</script>
 </body></html>
 """
 
