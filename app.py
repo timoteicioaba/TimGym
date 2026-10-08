@@ -304,7 +304,6 @@ DASHBOARD = """
 </header>
 <main id="top" class="app-shell">
 {% for message in get_flashed_messages() %}<p class="flash">{{ message }}</p>{% endfor %}
-{% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new ChatGPT key</h2></div><p class="muted">Copy it now; it is only shown once.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
 <section class="welcome">
   <div class="eyebrow">{{ today_label }}</div>
   <h1>Your training,<br>in one place.</h1>
@@ -565,7 +564,7 @@ def index():
         (g.user["id"],),
     ).fetchone()[0]
     return render_template_string(
-        DASHBOARD, user=g.user, csrf=csrf_token(), new_api_key=None, today=date.today().isoformat(),
+        DASHBOARD, user=g.user, csrf=csrf_token(), today=date.today().isoformat(),
         today_label=date.today().strftime("%A · %B %d"),
         latest_weight=latest_weight, weight_change=weight_change, week_count=week_count,
         workouts=workouts, measurements=measurements, chart_points=chart_points,
