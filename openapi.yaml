@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: TimGym
+  version: 1.0.0
+  description: Log and review the authenticated user's workout history. Each API key is private to one TimGym account.
+servers:
+  - url: https://gym.tim0tei.fun
+security:
+  - bearerAuth: []
+paths:
+  /api/me:
+    get:
+      operationId: getMyTimGymAccount
+      summary: Check which TimGym account is connected
+      responses:
+        "200":
+          description: Connected account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username: { type: string }
+                required: [username]
+        "401":
+          description: Missing or invalid API key
+  /api/workouts:
+    get:
+      operationId: listMyWorkouts
+      summary: List my recent workouts
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Workouts belonging to the connected account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workouts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, format: date }
+                        exercise: { type: string }
+                        sets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              reps: { type: integer }
+                              weight_kg: { type: [number, "null"] }
+                              rpe: { type: [number, "null"] }
+                        notes: { type: string }
+    post:
+      operationId: logWorkout
+      summary: Log today's workout or a workout on a specified date
+      description: Save multiple exercises and each set's reps, weight in kilograms, and optional RPE. Ask the user to confirm the workout details before saving.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date: { type: string, format: date, description: Defaults to today if omitted }
+                exercises:
+                  type: array
+                  minItems: 1
+                  maxItems: 30
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string, maxLength: 80 }
+                      notes: { type: string, maxLength: 500 }
+                      sets:
+                        type: array
+                        minItems: 1
+                        maxItems: 99
+                        items:
+                          type: object
+                          properties:
+                            reps: { type: integer, minimum: 1, maximum: 999 }
+                            weight_kg: { type: [number, "null"], minimum: 0, maximum: 2000 }
+                            rpe: { type: [number, "null"], minimum: 1, maximum: 10 }
+                          required: [reps]
+                    required: [name, sets]
+              required: [exercises]
+      responses:
+        "201":
+          description: Workout saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workout_id: { type: string, format: uuid }
+                  date: { type: string, format: date }
+                  exercises_saved: { type: integer }
+        "400":
+          description: Invalid workout data
+        "401":
+          description: Missing or invalid API key
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: TimGym API key
