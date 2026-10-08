@@ -10,7 +10,7 @@ From the folder containing `compose.yaml`, run:
 docker compose up -d --build
 ```
 
-Open `https://gym.tim0tei.fun` (or your server address).
+Open `https://gym.tim0tei.fun` (or your server address). On first startup, Docker downloads the local AI model (about 3 GB); allow it time to finish.
 
 SQLite data is stored in the `gym_data` Docker volume and survives container restarts.
 
@@ -30,13 +30,13 @@ To list accounts:
 docker compose exec timgym python app.py list-users
 ```
 
-## Log a workout from your iPhone without API billing
+## Log workouts with private local AI
 
-On the dashboard, type your workout in **Log a workout** and tap **Continue in TimGym Upload**. The app passes the text to the iPhone Shortcut named **TimGym Upload**. The Shortcut uses your iPhone’s **on-device model** to structure the workout, lets you review it, and posts it to TimGym with your personal TimGym key.
+Type a workout on the dashboard and choose **Interpret workout locally**. TimGym sends the note to Ollama on the private Docker network. Qwen 3.5 2B returns the workout structure; review it in the app and save only when it looks right.
 
-This does not use the ChatGPT model or OpenAI API, and does not require an OpenAI API key or API billing. It requires an iPhone whose Shortcuts app offers an on-device model.
+The model runs on the CasaOS server CPU. It does not use ChatGPT or an OpenAI API, and workout notes are not sent to an external AI service. The model files persist in the `ollama_data` Docker volume.
 
-Build the Shortcut by following [SHORTCUT.md](SHORTCUT.md). Keep it private because it contains your TimGym key. Each person creates their own private Shortcut with their own key.
+The iPhone Shortcut in [SHORTCUT.md](SHORTCUT.md) remains an optional alternative. Each person using it needs their own private API key.
 
 ## Optional: connect a custom GPT Action
 
@@ -46,7 +46,7 @@ The API key grants access only to that person's workouts. Rotating it in TimGym 
 
 ## Data and security
 
-- SQLite is stored in the persistent `gym_data` Docker volume.
+- SQLite is stored in the persistent `gym_data` Docker volume; Ollama model files are stored in `ollama_data`.
 - Use a unique, long `SECRET_KEY` in your deployment environment if you manage environment variables. If omitted, TimGym generates a random session key and stores it in the data volume.
 - The site uses secure, HTTP-only, same-site session cookies and CSRF protection.
 - Back up the `gym_data` volume. Do not share account passwords or TimGym API keys.
