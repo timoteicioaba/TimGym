@@ -859,10 +859,14 @@ def interpret_workout():
         return {"error": "Keep the workout note under 4,000 characters."}, 400
     try:
         return interpret_workout_note(note)
-    except HTTPError as exc:
+    except HTTPError:
         return {"error": "The local model could not process that workout. Try again shortly."}, 502
-    except (URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+    except (URLError, TimeoutError):
         return {"error": "The local model is starting or unavailable. Wait a little and try again."}, 503
+    except json.JSONDecodeError:
+        return {"error": "The local model returned invalid JSON. Try again."}, 502
+    except (ValueError, TypeError) as exc:
+        return {"error": str(exc)}, 422
 
 
 @app.post("/workouts/save")
