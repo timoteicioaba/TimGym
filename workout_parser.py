@@ -28,8 +28,8 @@ _COMPOSITE_PATTERNS = [
     re.compile(r"(?<!\w)set\s*\d+\s*[:=-]\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
 ]
 _SINGLE_REPS_RE = re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE)
-_SET_COUNT_RE = re.compile(r"(?<!\\w)(?P<sets>\\d{1,2})\\s+sets?\\b", re.IGNORECASE)
-_REP_RANGE_RE = re.compile(r"(?<!\\w)(?P<sets>\\d{1,2})\\s*(?:sets?\\s*(?:of\\s*)?|[x×]\\s*)(?P<low>\\d{1,3})\\s*[-–]\\s*(?P<high>\\d{1,3})(?:\\s*reps?\\b)?", re.IGNORECASE)
+_SET_COUNT_RE = re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s+sets?\b", re.IGNORECASE)
+_REP_RANGE_RE = re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*(?:sets?\s*(?:of\s*)?|[x×]\s*)(?P<low>\d{1,3})\s*[-–]\s*(?P<high>\d{1,3})(?:\s*reps?\b)?", re.IGNORECASE)
 _NOISE_RE = re.compile(
     r"\b(?:i|did|do|today|yesterday|then|and|after|that|for|of|at|with|"
     r"set|sets|rep|reps|each|my|workout|session|please|log|weight|"
@@ -150,7 +150,7 @@ def parse_workout_note(note):
         except ValueError:
             return {"clarification": "That date is invalid. Use YYYY-MM-DD."}
         text = text[:date_match.start()] + " " + text[date_match.end():]
-    elif re.search(r"\\byesterday\\b", text, re.IGNORECASE):
+    elif re.search(r"\byesterday\b", text, re.IGNORECASE):
         workout_date -= timedelta(days=1)
 
     parsed = []
