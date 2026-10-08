@@ -5,7 +5,7 @@ This shortcut takes workout text from TimGym, structures it with your iPhone’s
 ## Requirements
 
 - iPhone with the Shortcuts app and an available on-device model.
-- A TimGym account and its personal API key. Create or rotate it in **ChatGPT connection** on the TimGym dashboard.
+- A TimGym account and its personal API key. Create or rotate it on the **Connection** page in TimGym.
 - Use Safari at `https://gym.tim0tei.fun`; the app's **Continue in TimGym Upload** button launches the shortcut by name and passes the text.
 
 Apple documents the `shortcuts://run-shortcut` handoff URL [here](https://support.apple.com/en-au/guide/shortcuts/apd624386f42/ios).
