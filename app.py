@@ -474,7 +474,7 @@ interpretButton.addEventListener("click", async function () {
       if (!line.trim()) return;
       const event = JSON.parse(line);
       if (event.type === "progress") status.textContent = event.message;
-      if (event.type === "error") throw new Error(event.error);
+      if (event.type === "error") throw new Error(event.error + (event.request_id ? " (request " + event.request_id + ")" : ""));
       if (event.type === "result") result = event;
       if (event.type === "clarification") result = event;
     };
@@ -946,8 +946,16 @@ def workout_model_request(note, request_id):
         app.logger.exception("Ollama connection failed request_id=%s", request_id)
         yield {"type": "error", "error": f"Could not connect to Ollama: {exc}", "request_id": request_id}
     except (json.JSONDecodeError, ValueError, TypeError) as exc:
-        app.logger.exception("Workout model response was invalid request_id=%s", request_id)
-        yield {"type": "error", "error": f"Model response could not be parsed: {exc}", "request_id": request_id}
+        raw_output = "".join(chunks)
+        app.logger.exception("Workout model response was invalid request_id=%s output=%s", request_id, raw_output[:1200])
+        yield {
+            "type": "error",
+            "error": f"Model response could not be parsed: {exc}. Output preview: {raw_output[:500] or '(empty)'}.",
+            "request_id": request_id,
+        }
+    except Exception as exc:
+        app.logger.exception("Unexpected workout model failure request_id=%s", request_id)
+        yield {"type": "error", "error": f"Unexpected model error: {type(exc).__name__}: {exc}", "request_id": request_id}
 
 
 def read_ollama_json(path, timeout=4):
