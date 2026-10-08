@@ -166,6 +166,11 @@ def parse_workout_note(note):
             continue
 
         weights = _weight_matches(segment)
+        # Negative loads (such as assisted pull-ups) need a dedicated schema;
+        # never silently turn them into positive weights.
+        if any(match.groupdict().get("sign") == "-" for match in weights):
+            unknown.append(segment)
+            continue
         if len(weights) > 1 and len(weights) != len(prescriptions):
             unknown.append(segment)
             continue
