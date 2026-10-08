@@ -392,6 +392,7 @@ DASHBOARD = """
   <button class="full-button" id="interpret-workout" type="button" style="margin-top:12px">Interpret workout locally</button>
   <div class="workout-preview" id="workout-preview" hidden>
     <h3>Review before saving</h3>
+    <p class="panel-kicker" id="workout-preview-date"></p>
     <div id="workout-preview-content"></div>
     <button class="full-button" id="save-workout" type="button" style="margin-top:12px">Save workout</button>
   </div>
@@ -435,6 +436,7 @@ const noteField = document.getElementById("workout-note");
 const status = document.getElementById("workout-ai-status");
 const preview = document.getElementById("workout-preview");
 const previewContent = document.getElementById("workout-preview-content");
+const previewDate = document.getElementById("workout-preview-date");
 const interpretButton = document.getElementById("interpret-workout");
 const saveButton = document.getElementById("save-workout");
 
@@ -462,6 +464,7 @@ interpretButton.addEventListener("click", async function () {
       return;
     }
     pendingWorkout = result.workout;
+    previewDate.textContent = "Workout date · " + pendingWorkout.date;
     previewContent.replaceChildren();
     for (const exercise of pendingWorkout.exercises) {
       const item = document.createElement("div");
