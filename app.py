@@ -245,7 +245,7 @@ a:hover{text-decoration:underline}
 .chart-line.range-1{stroke:#c7f36a}.chart-line.range-2{stroke:#75c8ff}.chart-line.range-3{stroke:#c69cff}
 .chart-point.range-1{fill:#c7f36a}.chart-point.range-2{fill:#75c8ff}.chart-point.range-3{fill:#c69cff}
 .lift-trends{display:grid;gap:14px}.lift-card{padding:14px;border:1px solid #28342d;border-radius:15px;background:#0c120f}.lift-card h3{margin:0;font-size:.96rem;letter-spacing:-.02em}.range-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 0;color:var(--muted);font-size:.72rem}.range-legend span{display:flex;align-items:center;gap:5px}.legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-dot.range-1{background:#c7f36a}.legend-dot.range-2{background:#75c8ff}.legend-dot.range-3{background:#c69cff}
-.workout-preview{margin-top:14px;padding:14px;border:1px solid #3a4b3d;border-radius:14px;background:#0b100d}.workout-preview h3{margin:0 0 10px;font-size:.95rem}.preview-exercise{padding:10px 0;border-top:1px solid #253029}.preview-exercise:first-child{border-top:0;padding-top:0}.preview-exercise strong{display:block}.preview-exercise small{display:block;color:var(--muted);margin-top:4px}
+.workout-preview{margin-top:14px;padding:14px;border:1px solid #3a4b3d;border-radius:14px;background:#0b100d}.workout-preview h3{margin:0 0 10px;font-size:.95rem}.preview-exercise{padding:10px 0;border-top:1px solid #253029}.preview-exercise:first-child{border-top:0;padding-top:0}.preview-exercise strong{display:block}.preview-exercise small{display:block;color:var(--muted);margin-top:4px}.missing-detail-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}.missing-detail-fields input:last-child{grid-column:1/-1}.preview-set-row{display:grid;grid-template-columns:48px 1fr 1fr;align-items:center;gap:8px;margin-top:8px;color:var(--muted);font-size:.82rem}.preview-set-row input{min-height:42px}
 .model-progress{height:5px;margin-top:12px;border-radius:999px;background:#253029;overflow:hidden}.model-progress span{display:block;width:35%;height:100%;border-radius:999px;background:var(--accent);animation:model-progress-slide 1.2s ease-in-out infinite alternate}@keyframes model-progress-slide{from{transform:translateX(0)}to{transform:translateX(185%)}}
 .diagnostics{margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;padding:12px;border-radius:12px;background:#0b100d;color:#d5e2d7;font:.77rem/1.45 ui-monospace,monospace}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:13px}
@@ -409,6 +409,23 @@ const previewDate = document.getElementById("workout-preview-date");
 const interpretButton = document.getElementById("interpret-workout");
 const saveButton = document.getElementById("save-workout");
 
+function updateSaveAvailability() {
+  const exercises = pendingWorkout?.exercises || [];
+  const complete = exercises.length > 0 && exercises.every(exercise =>
+    exercise.sets.length > 0 && exercise.sets.every(set =>
+      Number.isInteger(Number(set.reps)) && Number(set.reps) >= 1 && Number(set.reps) <= 999 &&
+      (set.weight_kg === null || set.weight_kg === undefined ||
+        (Number.isFinite(Number(set.weight_kg)) && Number(set.weight_kg) >= 0 && Number(set.weight_kg) <= 2000))
+    )
+  );
+  saveButton.disabled = !complete;
+  if (exercises.length && !complete) {
+    status.textContent = "Fill in the missing details above to enable saving.";
+  } else if (complete) {
+    status.textContent = "Review the details, then save when they look right.";
+  }
+}
+
 interpretButton.addEventListener("click", async function () {
   const note = noteField.value.trim();
   if (!note) {
@@ -442,11 +459,101 @@ interpretButton.addEventListener("click", async function () {
       item.className = "preview-exercise";
       const name = document.createElement("strong");
       name.textContent = exercise.name;
-      const details = document.createElement("small");
-      details.textContent = exercise.sets.map(set =>
-        set.reps + " reps" + (set.weight_kg === null ? "" : " × " + set.weight_kg + " kg")
-      ).join(" · ");
-      item.append(name, details);
+      item.append(name);
+
+      if (!exercise.sets.length) {
+        const prompt = document.createElement("small");
+        prompt.textContent = "Add the missing set and rep details:";
+        item.append(prompt);
+        const fields = document.createElement("div");
+        fields.className = "missing-detail-fields";
+        const setsInput = document.createElement("input");
+        setsInput.type = "number";
+        setsInput.min = "1";
+        setsInput.max = "99";
+        setsInput.step = "1";
+        setsInput.placeholder = "Sets";
+        setsInput.setAttribute("aria-label", exercise.name + " sets");
+        const repsInput = document.createElement("input");
+        repsInput.type = "number";
+        repsInput.min = "1";
+        repsInput.max = "999";
+        repsInput.step = "1";
+        repsInput.placeholder = "Reps per set";
+        repsInput.setAttribute("aria-label", exercise.name + " reps per set");
+        const weightInput = document.createElement("input");
+        weightInput.type = "number";
+        weightInput.min = "0";
+        weightInput.max = "2000";
+        weightInput.step = "0.1";
+        weightInput.placeholder = "Weight kg (optional)";
+        weightInput.setAttribute("aria-label", exercise.name + " weight in kg (optional)");
+        fields.append(setsInput, repsInput, weightInput);
+        item.append(fields);
+        const syncFields = () => {
+          const count = Number.parseInt(setsInput.value, 10);
+          const reps = Number.parseInt(repsInput.value, 10);
+          const weight = weightInput.value === "" ? null : Number(weightInput.value);
+          exercise.sets = Number.isInteger(count) && count >= 1 && count <= 99
+            ? Array.from({length: count}, () => ({
+                reps: Number.isInteger(reps) && reps >= 1 && reps <= 999 ? reps : null,
+                weight_kg: Number.isFinite(weight) && weight >= 0 && weight <= 2000 ? weight : null
+              }))
+            : [];
+          updateSaveAvailability();
+        };
+        setsInput.addEventListener("input", syncFields);
+        repsInput.addEventListener("input", syncFields);
+        weightInput.addEventListener("input", syncFields);
+      } else {
+        exercise.sets.forEach((set, index) => {
+          const row = document.createElement("div");
+          row.className = "preview-set-row";
+          const label = document.createElement("span");
+          label.textContent = "Set " + (index + 1);
+          row.append(label);
+          const repsInput = document.createElement("input");
+          repsInput.type = "number";
+          repsInput.min = "1";
+          repsInput.max = "999";
+          repsInput.step = "1";
+          repsInput.placeholder = "Reps";
+          repsInput.setAttribute("aria-label", exercise.name + " set " + (index + 1) + " reps");
+          if (set.reps === null || set.reps === undefined) {
+            row.append(repsInput);
+            repsInput.addEventListener("input", () => {
+              const value = Number.parseInt(repsInput.value, 10);
+              set.reps = Number.isInteger(value) && value >= 1 && value <= 999 ? value : null;
+              updateSaveAvailability();
+            });
+          } else {
+            const reps = document.createElement("span");
+            reps.textContent = set.reps + " reps";
+            row.append(reps);
+          }
+
+          const needsLoadCorrection = (exercise.missing_fields || []).includes("weight_kg");
+          if (set.weight_kg !== null && set.weight_kg !== undefined) {
+            const load = document.createElement("span");
+            load.textContent = set.weight_kg + " kg";
+            row.append(load);
+          } else if (needsLoadCorrection) {
+            const weightInput = document.createElement("input");
+            weightInput.type = "number";
+            weightInput.min = "0";
+            weightInput.max = "2000";
+            weightInput.step = "0.1";
+            weightInput.placeholder = "Weight kg (optional)";
+            weightInput.setAttribute("aria-label", exercise.name + " set " + (index + 1) + " weight in kg");
+            row.append(weightInput);
+            weightInput.addEventListener("input", () => {
+              set.weight_kg = weightInput.value === "" ? null : Number(weightInput.value);
+            });
+          }
+          item.append(row);
+        });
+      }
+
       if (exercise.notes) {
         const notes = document.createElement("small");
         notes.textContent = exercise.notes;
@@ -454,9 +561,9 @@ interpretButton.addEventListener("click", async function () {
       }
       previewContent.append(item);
     }
+    updateSaveAvailability();
     preview.hidden = false;
-    saveButton.disabled = false;
-    status.textContent = "Check the details, then save when they look right.";
+    updateSaveAvailability();
   } catch (error) {
     status.textContent = error.message;
     liveModelStatus.textContent = "Parser status: unable to parse this note.";
