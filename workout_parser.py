@@ -19,7 +19,7 @@ _AT_WEIGHT_RE = re.compile(
 )
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _COMPOSITE_PATTERNS = [
-    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*(?:(?:of\s*)|[x×]\s*)?(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*(?:(?:of\s*)|[x×]\s*)?(?P<reps>\d{1,3})(?:\s*reps?\b)?", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*,\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\s*(?:for\s*)?(?P<sets>\d{1,2})\s*sets?\b", re.IGNORECASE),
     re.compile(r"(?<![\w.])(?P<weight>\d+(?:[.,]\d+)?\s*(?:kg|kgs|kilograms?|lb|lbs|pounds?))\s*[x×]\s*(?P<reps>\d{1,3})(?!\d)", re.IGNORECASE),
