@@ -1,6 +1,6 @@
 # TimGym Upload iPhone Shortcut
 
-This is an optional iPhone Shortcut workflow. The main TimGym dashboard now interprets workouts with a local model on your CasaOS server, so you do not need this Shortcut to log workouts. This alternate workflow uses your iPhone’s on-device model and sends the reviewed workout to your TimGym account.
+This is an optional iPhone Shortcut workflow. The main TimGym dashboard parses common workout formats directly, so you do not need this Shortcut for ordinary workout logging. This alternate workflow uses your iPhone’s on-device model and sends the reviewed workout to your TimGym account.
 
 ## Requirements
 
@@ -51,4 +51,4 @@ Replace `YOUR_PERSONAL_TIMGYM_KEY` with the key shown by TimGym. Keep this short
 2. Provide workout text as the shortcut input, such as by selecting text and sharing it to the shortcut.
 3. Check the structured workout and choose **Save to TimGym**.
 
-To use this optional route, run the shortcut from the iOS share sheet with workout text selected as input. It operates separately from the dashboard’s server-side model.
+To use this optional route, run the shortcut from the iOS share sheet with workout text selected as input. It operates separately from the dashboard parser and can handle more free-form notes through the on-device model.
