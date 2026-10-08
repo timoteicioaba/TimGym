@@ -19,10 +19,12 @@ _AT_WEIGHT_RE = re.compile(
 )
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _COMPOSITE_PATTERNS = [
-    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*(?:of\s*)?(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*(?:(?:of\s*)|[x×]\s*)?(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*,\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\s*(?:for\s*)?(?P<sets>\d{1,2})\s*sets?\b", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*[x×]\s*(?P<reps>\d{1,3})(?:\s*reps?)?(?!\d)", re.IGNORECASE),
+    re.compile(r"(?<![\w.])(?P<weight>\d+(?:[.,]\d+)?\s*(?:kg|kgs|kilograms?|lb|lbs|pounds?))\s*[x×]\s*(?P<reps>\d{1,3})(?!\d)", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*[x×]\s*(?P<weight>\d+(?:[.,]\d+)?\s*(?:kg|kgs|kilograms?|lb|lbs|pounds?))", re.IGNORECASE),
     re.compile(r"(?<!\w)set\s*\d+\s*[:=-]\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
 ]
 _SINGLE_REPS_RE = re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE)
@@ -129,7 +131,7 @@ def parse_workout_note(note):
     date_match = _DATE_RE.search(text)
     if date_match:
         try:
-            workout_date = date.fromisoformat(date_match.group()).date()
+            workout_date = date.fromisoformat(date_match.group())
         except ValueError:
             return {"clarification": "That date is invalid. Use YYYY-MM-DD."}
         text = text[:date_match.start()] + " " + text[date_match.end():]
