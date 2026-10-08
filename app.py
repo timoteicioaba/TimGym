@@ -478,6 +478,7 @@ interpretButton.addEventListener("click", async function () {
   };
   await pollModelStatus();
   const modelPollTimer = window.setInterval(pollModelStatus, 2000);
+  let interpretationFailed = false;
   try {
     const response = await fetch("{{ url_for('interpret_workout') }}", {
       method: "POST",
@@ -495,7 +496,10 @@ interpretButton.addEventListener("click", async function () {
     const handleEvent = function (line) {
       if (!line.trim()) return;
       const event = JSON.parse(line);
-      if (event.type === "progress") status.textContent = event.message;
+      if (event.type === "progress") {
+        status.textContent = event.message;
+        liveModelStatus.textContent = "Model status: " + event.message;
+      }
       if (event.type === "error") throw new Error(event.error + (event.request_id ? " (request " + event.request_id + ")" : ""));
       if (event.type === "result") result = event;
       if (event.type === "clarification") result = event;
@@ -538,11 +542,13 @@ interpretButton.addEventListener("click", async function () {
     saveButton.disabled = false;
     status.textContent = "Check the details, then save when they look right.";
   } catch (error) {
+    interpretationFailed = true;
     status.textContent = error.message;
+    liveModelStatus.textContent = "Model status: " + error.message;
   } finally {
     window.clearInterval(modelPollTimer);
     if (pendingWorkout) liveModelStatus.textContent = "Model status: interpretation complete.";
-    else if (status.textContent.startsWith("Model response") || status.textContent.startsWith("Ollama") || status.textContent.startsWith("Could not")) liveModelStatus.textContent = "Model status: interpretation failed.";
+    else if (interpretationFailed) liveModelStatus.textContent = "Model status: interpretation failed — see the message above.";
     else liveModelStatus.textContent = "Model status: idle.";
     progress.hidden = true;
     interpretButton.disabled = false;
