@@ -22,9 +22,9 @@ _COMPOSITE_PATTERNS = [
     re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*(?:(?:of\s*)|[x×]\s*)?(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*,\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\s*(?:for\s*)?(?P<sets>\d{1,2})\s*sets?\b", re.IGNORECASE),
-    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*[x×]\s*(?P<reps>\d{1,3})(?:\s*reps?)?(?!\d)", re.IGNORECASE),
     re.compile(r"(?<![\w.])(?P<weight>\d+(?:[.,]\d+)?\s*(?:kg|kgs|kilograms?|lb|lbs|pounds?))\s*[x×]\s*(?P<reps>\d{1,3})(?!\d)", re.IGNORECASE),
     re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*[x×]\s*(?P<weight>\d+(?:[.,]\d+)?\s*(?:kg|kgs|kilograms?|lb|lbs|pounds?))", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*[x×]\s*(?P<reps>\d{1,3})(?:\s*reps?)?(?!\d)", re.IGNORECASE),
     re.compile(r"(?<!\w)set\s*\d+\s*[:=-]\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
 ]
 _SINGLE_REPS_RE = re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE)
