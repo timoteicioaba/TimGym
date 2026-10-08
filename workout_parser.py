@@ -28,6 +28,8 @@ _COMPOSITE_PATTERNS = [
     re.compile(r"(?<!\w)set\s*\d+\s*[:=-]\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
 ]
 _SINGLE_REPS_RE = re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE)
+_SET_COUNT_RE = re.compile(r"(?<!\\w)(?P<sets>\\d{1,2})\\s+sets?\\b", re.IGNORECASE)
+_REP_RANGE_RE = re.compile(r"(?<!\\w)(?P<sets>\\d{1,2})\\s*(?:sets?\\s*(?:of\\s*)?|[x×]\\s*)(?P<low>\\d{1,3})\\s*[-–]\\s*(?P<high>\\d{1,3})(?:\\s*reps?\\b)?", re.IGNORECASE)
 _NOISE_RE = re.compile(
     r"\b(?:i|did|do|today|yesterday|then|and|after|that|for|of|at|with|"
     r"set|sets|rep|reps|each|my|workout|session|please|log|weight|"
@@ -167,7 +169,11 @@ def parse_workout_note(note):
                 "sets": set_count, "reps": None,
             }]
             prescriptions_for_name = prescription_spans
-            rows = [{"reps": None, "weight_kg": None} for _ in range(set_count)]
+            range_weight = min(usable_weights, key=lambda item: abs(item.start() - rep_range.end()), default=None)
+            rows = [
+                {"reps": None, "weight_kg": _weight_kg(range_weight) if range_weight else None}
+                for _ in range(set_count)
+            ]
             missing_fields = ["reps"]
         elif prescriptions:
             prescriptions_for_name = prescriptions
@@ -197,7 +203,7 @@ def parse_workout_note(note):
             rows = []
             missing_fields = ["sets", "reps"]
 
-        if any(len(rows) > 99 for _ in (0,)):
+        if len(rows) > 99:
             continue
         if not rows and "sets" not in missing_fields:
             missing_fields.append("sets")
