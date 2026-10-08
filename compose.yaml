@@ -10,6 +10,42 @@ services:
     environment:
       DATABASE_PATH: /data/timgym.db
       SECRET_KEY: ${SECRET_KEY:-change-this-local-secret}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3.5:2b
+    depends_on:
+      ollama-model:
+        condition: service_completed_successfully
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: timgym-ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_NO_CLOUD: "1"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "ps"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  ollama-model:
+    image: ollama/ollama:latest
+    container_name: timgym-ollama-model
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_NO_CLOUD: "1"
+    entrypoint: ["ollama"]
+    command: ["pull", "qwen3.5:2b"]
+    restart: "no"
+    volumes:
+      - ollama_data:/root/.ollama
 
 volumes:
   gym_data:
+  ollama_data:
