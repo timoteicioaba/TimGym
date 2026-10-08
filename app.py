@@ -33,16 +33,29 @@ def load_secret_key():
     try:
         return key_file.read_text(encoding="utf-8")
     except FileNotFoundError:
+        # Prepare a complete candidate, then publish it without replacing a
+        # key another Gunicorn worker may have created at the same time.
         key = secrets.token_urlsafe(48)
+        candidate = DB_PATH.parent / f".session_secret.{secrets.token_hex(8)}"
         try:
-            key_file.write_text(key, encoding="utf-8")
+            with candidate.open("x", encoding="utf-8") as handle:
+                handle.write(key)
+                handle.flush()
+                os.fsync(handle.fileno())
             try:
-                key_file.chmod(0o600)
+                candidate.chmod(0o600)
             except OSError:
                 pass
-        except FileExistsError:
-            return key_file.read_text(encoding="utf-8")
-        return key
+            try:
+                os.link(candidate, key_file)
+                return key
+            except FileExistsError:
+                return key_file.read_text(encoding="utf-8")
+        finally:
+            try:
+                candidate.unlink()
+            except FileNotFoundError:
+                pass
 
 
 app.secret_key = load_secret_key()
@@ -263,7 +276,8 @@ def login():
         return redirect(url_for("index"))
     if request.method == "POST":
         if not valid_csrf():
-            abort(400)
+            flash("Your sign-in session expired. Refresh the page and try again.")
+            return redirect(url_for("login"))
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = get_db().execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE", (username,)).fetchone()
