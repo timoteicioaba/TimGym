@@ -245,9 +245,10 @@ a:hover{text-decoration:underline}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:13px}
 .fields.three{grid-template-columns:repeat(2,minmax(0,1fr))}
 label{display:block;color:var(--muted);font-size:.78rem;font-weight:600;margin:0 0 6px}
-input{width:100%;min-height:48px;border:1px solid #344239;border-radius:12px;padding:10px 12px;font:inherit;color:var(--text);background:#0b100d}
-input::placeholder{color:#65736a}
-input:focus{outline:2px solid #c7f36a88;border-color:var(--accent)}
+input,textarea{width:100%;min-height:48px;border:1px solid #344239;border-radius:12px;padding:10px 12px;font:inherit;color:var(--text);background:#0b100d}
+textarea{min-height:116px;resize:vertical}
+input::placeholder,textarea::placeholder{color:#65736a}
+input:focus,textarea:focus{outline:2px solid #c7f36a88;border-color:var(--accent)}
 button{min-height:48px;border:0;border-radius:13px;padding:11px 17px;color:#16200c;background:var(--accent);font:700 .94rem -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
 button:hover{filter:brightness(1.06)}
 button.secondary{background:#202b24;color:var(--text);border:1px solid #344239}
@@ -327,6 +328,14 @@ DASHBOARD = """
   </svg>
   {% else %}<p class="empty">Your trend will appear after your first body-weight check-in.</p>{% endif %}
 </section>
+<section class="panel" id="workout-log">
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Log with ChatGPT</h2></div><span class="panel-kicker">iPhone Shortcut</span></div>
+  <p class="muted" style="margin:0 0 13px">Describe your session naturally. ChatGPT will structure it, show you what it understood, and ask before saving.</p>
+  <label for="workout-note">YOUR WORKOUT</label>
+  <textarea id="workout-note" maxlength="4000" placeholder="Example: Squats 3 sets of 5 at 100 kg, then bench 3 × 8 at 60 kg."></textarea>
+  <button class="full-button" id="run-workout-shortcut" type="button" style="margin-top:12px">Continue in ChatGPT Shortcut</button>
+  <p class="panel-kicker" id="shortcut-handoff-status" role="status" style="margin:10px 0 0">Opens your “TimGym Upload” Shortcut. You can review before it saves.</p>
+</section>
 <section class="panel" id="log">
   <details>
     <summary>Log a body check-in <span>Weight, body fat, measurements</span></summary>
@@ -361,9 +370,23 @@ DASHBOARD = """
 <form method="post" action="{{ url_for('logout') }}" style="padding:0 2px"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">Sign out</button></form>
 </main>
 <nav class="bottom-nav" aria-label="Main navigation">
-<a href="#top">Home</a><a href="#trends">Trends</a><a href="#log">Log</a><a href="#account">Account</a>
+<a href="#top">Home</a><a href="#trends">Trends</a><a href="#workout-log">Log</a><a href="#account">Account</a>
 </nav>
-</body></html>
+<script>
+document.getElementById("run-workout-shortcut").addEventListener("click", function () {
+  const workout = document.getElementById("workout-note").value.trim();
+  const status = document.getElementById("shortcut-handoff-status");
+  if (!workout) {
+    status.textContent = "Write a workout first.";
+    return;
+  }
+  const shortcutUrl = "shortcuts://run-shortcut?name="
+    + encodeURIComponent("TimGym Upload")
+    + "&input=text&text=" + encodeURIComponent(workout);
+  status.textContent = "Opening TimGym Upload…";
+  window.location.href = shortcutUrl;
+});
+</script>
 """
 
 
