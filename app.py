@@ -351,7 +351,7 @@ DASHBOARD = """
 </section>
 <section class="panel" id="workout-log">
   <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Log a workout</h2></div><span class="panel-kicker">Fast local parser</span></div>
-  <p class="muted" style="margin:0 0 13px">Write it naturally or use a format like “Squat 3x5 @ 80 kg”. The parser handles common set, rep, and weight phrasing, then asks when details are unclear.</p>
+  <p class="muted" style="margin:0 0 13px">Write it naturally or use a format like “Squat 3x5 @ 80 kg”. The parser previews recognizable exercises and adds fields for missing set or rep details.</p>
   <label for="workout-note">YOUR WORKOUT</label>
   <textarea id="workout-note" maxlength="4000" placeholder="Example: Squat 3x5 @ 80 kg; bench press 3 sets of 8 at 60 kg."></textarea>
   <button class="full-button" id="interpret-workout" type="button" style="margin-top:12px">Parse workout</button>
@@ -615,7 +615,7 @@ CONNECTION_PAGE = """
 <section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Fast local parsing and optional integrations.</p></section>
 {% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new TimGym key</h2></div><p class="muted">Copy it now; it is shown only once. Anyone with this key can add workouts to your account.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Workout parser</h2></div></div>
-<p class="muted">Workout notes are interpreted by a deterministic parser running in TimGym. It recognizes common phrasing, including “Squat 3x5 @ 80 kg”, “Bench press: 3 sets of 8 at 60 lb”, and multiple exercises separated by commas, semicolons, or “then”. Pounds are converted to kilograms. It asks for clarification instead of guessing when the note is ambiguous.</p>
+<p class="muted">Workout notes are interpreted by a deterministic parser running in TimGym. It recognizes common phrasing, including “Squat 3x5 @ 80 kg”, “Bench press: 3 sets of 8 at 60 lb”, and multiple exercises separated by commas, semicolons, or “then”. Pounds are converted to kilograms. Recognizable exercises stay in the preview when details are missing, with fields to fill them in before saving.</p>
 <p class="panel-kicker">No model download, external AI service, or extra API cost. Nothing is saved until you review and confirm.</p>
 </section>
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Optional ChatGPT connection</h2></div></div>
