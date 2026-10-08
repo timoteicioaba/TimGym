@@ -463,7 +463,7 @@ interpretButton.addEventListener("click", async function () {
 
       if (!exercise.sets.length) {
         const prompt = document.createElement("small");
-        prompt.textContent = "Add the missing set and rep details:";
+        prompt.textContent = "Add or check the missing details:";
         item.append(prompt);
         const fields = document.createElement("div");
         fields.className = "missing-detail-fields";
@@ -534,19 +534,18 @@ interpretButton.addEventListener("click", async function () {
             row.append(reps);
           }
 
-          const needsLoadCorrection = (exercise.missing_fields || []).includes("weight_kg");
           if (set.weight_kg !== null && set.weight_kg !== undefined) {
             const load = document.createElement("span");
             load.textContent = set.weight_kg + " kg";
             row.append(load);
-          } else if (needsLoadCorrection) {
+          } else {
             const weightInput = document.createElement("input");
             weightInput.type = "number";
             weightInput.min = "0";
             weightInput.max = "2000";
             weightInput.step = "0.1";
             weightInput.placeholder = "Weight kg (optional)";
-            weightInput.setAttribute("aria-label", exercise.name + " set " + (index + 1) + " weight in kg");
+            weightInput.setAttribute("aria-label", exercise.name + " set " + (index + 1) + " weight in kg (optional)");
             row.append(weightInput);
             weightInput.addEventListener("input", () => {
               const value = weightInput.value === "" ? null : Number(weightInput.value);
