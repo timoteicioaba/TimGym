@@ -37,19 +37,19 @@ _NOISE_RE = re.compile(
 
 
 def _split_segments(text):
-    text = text.replace("\\r", "\\n")
-    text = re.sub(r"(?i)\\b(?:and\\s+then|then|after\\s+that)\\b", ";", text)
-    text = re.sub(r"\\n+|;", ";", text)
+    text = text.replace("\r", "\n")
+    text = re.sub(r"(?i)\b(?:and\s+then|then|after\s+that)\b", ";", text)
+    text = re.sub(r"\n+|;", ";", text)
     # A comma before another exercise clause is a common way to list sessions.
     text = re.sub(
-        r",\\s*(?=[A-Za-z][^,;]{0,100}\\b(?:\\d{1,2}\\s*[x×]|\\d{1,2}\\s+sets?\\b))",
+        r",\s*(?=[A-Za-z][^,;]{0,100}\b(?:\d{1,2}\s*[x×]|\d{1,2}\s+sets?\b))",
         ";",
         text,
         flags=re.IGNORECASE,
     )
     segments = []
     for clause in text.split(";"):
-        pieces = re.split(r"\\s+and\\s+", clause, flags=re.IGNORECASE)
+        pieces = re.split(r"\s+and\s+", clause, flags=re.IGNORECASE)
         current = pieces[0].strip()
         for piece in pieces[1:]:
             piece = piece.strip()
@@ -62,7 +62,7 @@ def _split_segments(text):
         if current:
             # Carry set-by-set fragments forward as additional prescriptions
             # for the exercise named in the preceding clause.
-            if segments and re.match(r"(?i)^(?:set\\s*\\d+\\s*[:=-]\\s*)?\\d{1,3}\\s*reps?\\b", current):
+            if segments and re.match(r"(?i)^(?:set\s*\d+\s*[:=-]\s*)?\d{1,3}\s*reps?\b", current):
                 segments[-1] += "; " + current
             else:
                 segments.append(current)
