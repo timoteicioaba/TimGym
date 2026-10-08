@@ -32,7 +32,7 @@ _SET_COUNT_RE = re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s+sets?\b", re.IGNORECASE)
 _REP_RANGE_RE = re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*(?:sets?\s*(?:of\s*)?|[x×]\s*)(?P<low>\d{1,3})\s*[-–]\s*(?P<high>\d{1,3})(?:\s*reps?\b)?", re.IGNORECASE)
 _NOISE_RE = re.compile(
     r"\b(?:i|did|do|today|yesterday|then|and|after|that|for|of|at|with|"
-    r"set|sets|rep|reps|each|my|workout|session|please|log|weight|heavy|light|easy|hard|tough|minute|minutes|mins|second|seconds|secs|hour|hours|"
+    r"set|sets|rep|reps|each|my|workout|session|please|log|weight|many|few|some|felt|feeling|heavy|light|easy|hard|tough|minute|minutes|mins|second|seconds|secs|hour|hours|"
     r"kg|kgs|kilogram|kilograms|lb|lbs|pound|pounds|bodyweight|body-weight)\b",
     re.IGNORECASE,
 )
