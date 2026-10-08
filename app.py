@@ -385,8 +385,8 @@ DASHBOARD = """
   </div>
 </section>
 <section class="panel" id="workout-log">
-  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Log a workout</h2></div><span class="panel-kicker">On-device model</span></div>
-  <p class="muted" style="margin:0 0 13px">Write your session here. Your iPhone’s on-device model structures it; review the result in the Shortcut before saving.</p>
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Log a workout</h2></div><span class="panel-kicker">Local server AI</span></div>
+  <p class="muted" style="margin:0 0 13px">Write your session here. The model on your CasaOS server structures it; review the result in the app before saving.</p>
   <label for="workout-note">YOUR WORKOUT</label>
   <textarea id="workout-note" maxlength="4000" placeholder="Example: Squats 3 sets of 5 at 100 kg, then bench 3 × 8 at 60 kg."></textarea>
   <button class="full-button" id="interpret-workout" type="button" style="margin-top:12px">Interpret workout locally</button>
@@ -522,7 +522,7 @@ CONNECTION_PAGE = """
 <header class="topbar"><a href="{{ url_for('index') }}" class="brand"><span class="brand-mark">T</span><span>TimGym</span></a><div class="user-chip">{{ user.username }}</div></header>
 <main class="app-shell">
 {% for message in get_flashed_messages() %}<p class="flash">{{ message }}</p>{% endfor %}
-<section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Set up your iPhone Shortcut and personal TimGym key.</p></section>
+<section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Local model status and optional integrations.</p></section>
 {% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new TimGym key</h2></div><p class="muted">Copy it now; it is shown only once. Anyone with this key can add workouts to your account.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Local workout model</h2></div></div>
 <p class="muted">TimGym uses Qwen 3.5 2B through Ollama on this server. The workout note is interpreted on your CasaOS machine; it is saved only after you review and confirm it. No ChatGPT or OpenAI API is used for this flow.</p>
