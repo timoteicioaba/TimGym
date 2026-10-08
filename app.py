@@ -1053,15 +1053,27 @@ def interpret_workout():
 def workout_model_test():
     if not valid_csrf():
         return {"error": "Your session expired. Refresh the page and try again."}, 400
+    sample_note = "Today I did back squats 3 sets of 5 at 80 kg, then bench press 2 sets of 8 at 50 kg."
     payload = {
         "model": OLLAMA_MODEL,
-        "prompt": "Reply with the single word READY.",
         "stream": False,
         "keep_alive": "5m",
-        "options": {"temperature": 0, "num_predict": 8},
+        "format": WORKOUT_RESPONSE_SCHEMA,
+        "options": {"temperature": 0},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Convert the workout note into the required JSON. Today's date is "
+                    + date.today().isoformat()
+                    + ". Represent each set separately. Do not add coaching notes or extra fields."
+                ),
+            },
+            {"role": "user", "content": sample_note},
+        ],
     }
     req = Request(
-        OLLAMA_URL + "/api/generate",
+        OLLAMA_URL + "/api/chat",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
@@ -1071,6 +1083,14 @@ def workout_model_test():
         with urlopen(req, timeout=300) as response:
             result = json.loads(response.read().decode("utf-8"))
         elapsed = __import__("time").perf_counter() - started
+        response_text = str(result.get("message", {}).get("content", "")).strip()
+        parsed_workout = json.loads(response_text) if response_text else None
+        valid_workout = (
+            isinstance(parsed_workout, dict)
+            and isinstance(parsed_workout.get("exercises"), list)
+            and len(parsed_workout["exercises"]) == 2
+            and all(isinstance(exercise.get("sets"), list) for exercise in parsed_workout["exercises"])
+        )
         try:
             running_models = read_ollama_json("/api/ps").get("models", [])
             loaded = any(
@@ -1080,9 +1100,11 @@ def workout_model_test():
         except (HTTPError, URLError, TimeoutError):
             loaded = None
         return {
-            "ok": True,
+            "ok": valid_workout,
             "model": result.get("model", OLLAMA_MODEL),
-            "response": str(result.get("response", "")).strip(),
+            "sample_note": sample_note,
+            "interpreted_workout": parsed_workout,
+            "raw_response": response_text[:1500],
             "elapsed_seconds": round(elapsed, 2),
             "load_seconds": round(result.get("load_duration", 0) / 1_000_000_000, 2),
             "prompt_tokens": result.get("prompt_eval_count"),
@@ -1090,6 +1112,7 @@ def workout_model_test():
             "generation_seconds": round(result.get("eval_duration", 0) / 1_000_000_000, 2),
             "loaded_after_test": loaded,
             "done_reason": result.get("done_reason"),
+            "error": None if valid_workout else "The model response did not contain the expected two-exercise workout.",
         }
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace").strip()
