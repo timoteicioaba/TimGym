@@ -32,9 +32,9 @@ docker compose exec timgym python app.py list-users
 
 ## Log a workout from your iPhone without API billing
 
-On the dashboard, type your workout in **Log with ChatGPT** and tap **Continue in ChatGPT Shortcut**. The app passes the text to the iPhone Shortcut named **TimGym Upload**. The Shortcut uses Apple's **Use Model → ChatGPT** to structure the workout, lets you review it, and posts it to TimGym with your personal TimGym key.
+On the dashboard, type your workout in **Log a workout** and tap **Continue in TimGym Upload**. The app passes the text to the iPhone Shortcut named **TimGym Upload**. The Shortcut uses your iPhone’s **on-device model** to structure the workout, lets you review it, and posts it to TimGym with your personal TimGym key.
 
-This does not use the OpenAI API or require an OpenAI API key. It requires an iPhone that supports Apple Intelligence's ChatGPT model action. Availability and usage limits depend on Apple and ChatGPT.
+This does not use the ChatGPT model or OpenAI API, and does not require an OpenAI API key or API billing. It requires an iPhone whose Shortcuts app offers an on-device model.
 
 Build the Shortcut by following [SHORTCUT.md](SHORTCUT.md). Keep it private because it contains your TimGym key. Each person creates their own private Shortcut with their own key.
 
@@ -49,4 +49,4 @@ The API key grants access only to that person's workouts. Rotating it in TimGym 
 - SQLite is stored in the persistent `gym_data` Docker volume.
 - Use a unique, long `SECRET_KEY` in your deployment environment if you manage environment variables. If omitted, TimGym generates a random session key and stores it in the data volume.
 - The site uses secure, HTTP-only, same-site session cookies and CSRF protection.
-- Back up the `gym_data` volume. Do not share account passwords or ChatGPT API keys.
+- Back up the `gym_data` volume. Do not share account passwords or TimGym API keys.
