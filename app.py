@@ -400,6 +400,7 @@ DASHBOARD = """
   </div>
   <div class="model-progress" id="model-progress" hidden aria-hidden="true"><span></span></div>
   <p class="panel-kicker" id="workout-ai-status" role="status" aria-live="polite" style="margin:10px 0 0">Your note is interpreted by the private model running on this server.</p>
+  <p class="panel-kicker" id="workout-model-live-status" role="status" aria-live="polite" style="margin:5px 0 0">Model status: idle.</p>
   <p class="panel-kicker" style="margin:8px 0 0"><a href="{{ url_for('connection') }}">Model and connection settings</a></p>
 </section>
 <section class="panel" id="log">
@@ -437,6 +438,7 @@ const csrfToken = {{ csrf|tojson }};
 let pendingWorkout = null;
 const noteField = document.getElementById("workout-note");
 const status = document.getElementById("workout-ai-status");
+const liveModelStatus = document.getElementById("workout-model-live-status");
 const progress = document.getElementById("model-progress");
 const preview = document.getElementById("workout-preview");
 const previewContent = document.getElementById("workout-preview-content");
@@ -456,6 +458,26 @@ interpretButton.addEventListener("click", async function () {
   progress.hidden = false;
   pendingWorkout = null;
   status.textContent = "Connecting to the local model…";
+  liveModelStatus.textContent = "Model status: checking Ollama…";
+  let modelPollBusy = false;
+  const pollModelStatus = async function () {
+    if (modelPollBusy) return;
+    modelPollBusy = true;
+    try {
+      const check = await fetch("{{ url_for('workout_model_status') }}", {headers: {"Accept": "application/json"}, cache: "no-store"});
+      const model = await check.json();
+      if (!check.ok || !model.reachable) liveModelStatus.textContent = "Model status: Ollama is unreachable.";
+      else if (!model.installed) liveModelStatus.textContent = "Model status: model download is not complete yet.";
+      else if (!model.loaded) liveModelStatus.textContent = "Model status: loading into memory…";
+      else liveModelStatus.textContent = "Model status: loaded and processing your workout…";
+    } catch (_error) {
+      liveModelStatus.textContent = "Model status: checking…";
+    } finally {
+      modelPollBusy = false;
+    }
+  };
+  await pollModelStatus();
+  const modelPollTimer = window.setInterval(pollModelStatus, 2000);
   try {
     const response = await fetch("{{ url_for('interpret_workout') }}", {
       method: "POST",
@@ -518,6 +540,10 @@ interpretButton.addEventListener("click", async function () {
   } catch (error) {
     status.textContent = error.message;
   } finally {
+    window.clearInterval(modelPollTimer);
+    if (pendingWorkout) liveModelStatus.textContent = "Model status: interpretation complete.";
+    else if (status.textContent.startsWith("Model response") || status.textContent.startsWith("Ollama") || status.textContent.startsWith("Could not")) liveModelStatus.textContent = "Model status: interpretation failed.";
+    else liveModelStatus.textContent = "Model status: idle.";
     progress.hidden = true;
     interpretButton.disabled = false;
   }
