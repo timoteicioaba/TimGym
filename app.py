@@ -242,6 +242,9 @@ a:hover{text-decoration:underline}
 .chart-grid{stroke:#29352e;stroke-dasharray:3 5}
 .chart-line{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .chart-point{fill:var(--accent);stroke:#111815;stroke-width:2}
+.chart-line.range-1{stroke:#c7f36a}.chart-line.range-2{stroke:#75c8ff}.chart-line.range-3{stroke:#c69cff}
+.chart-point.range-1{fill:#c7f36a}.chart-point.range-2{fill:#75c8ff}.chart-point.range-3{fill:#c69cff}
+.lift-trends{display:grid;gap:14px}.lift-card{padding:14px;border:1px solid #28342d;border-radius:15px;background:#0c120f}.lift-card h3{margin:0;font-size:.96rem;letter-spacing:-.02em}.range-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 0;color:var(--muted);font-size:.72rem}.range-legend span{display:flex;align-items:center;gap:5px}.legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-dot.range-1{background:#c7f36a}.legend-dot.range-2{background:#75c8ff}.legend-dot.range-3{background:#c69cff}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:13px}
 .fields.three{grid-template-columns:repeat(2,minmax(0,1fr))}
 label{display:block;color:var(--muted);font-size:.78rem;font-weight:600;margin:0 0 6px}
@@ -328,14 +331,30 @@ DASHBOARD = """
   </svg>
   {% else %}<p class="empty">Your trend will appear after your first body-weight check-in.</p>{% endif %}
 </section>
+<section class="panel" id="lifts">
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Main lift progression</h2></div><span class="panel-kicker">Best working weight · kg</span></div>
+  <p class="muted" style="margin:0 0 14px">Track your squat, bench press, and deadlift across rep ranges.</p>
+  <div class="lift-trends">
+  {% for lift in lift_charts %}<article class="lift-card">
+    <h3>{{ lift.name }}</h3>
+    <div class="range-legend"><span><i class="legend-dot range-1"></i>1–5 reps</span><span><i class="legend-dot range-2"></i>6–10 reps</span><span><i class="legend-dot range-3"></i>11+ reps</span></div>
+    {% if lift.has_data %}<svg class="chart" viewBox="0 0 700 190" role="img" aria-label="{{ lift.name }} working weight trend">
+      <line class="chart-grid" x1="48" y1="42" x2="680" y2="42"/><line class="chart-grid" x1="48" y1="98" x2="680" y2="98"/><line class="chart-grid" x1="48" y1="154" x2="680" y2="154"/>
+      <text x="2" y="46">{{ "%.1f"|format(lift.chart_max) }} kg</text><text x="2" y="158">{{ "%.1f"|format(lift.chart_min) }} kg</text>
+      {% for series in lift.series %}{% if series.points %}<polyline class="chart-line range-{{ series.key }}" points="{{ series.polyline }}"/>{% for point in series.points %}<circle class="chart-point range-{{ series.key }}" cx="{{ point.x }}" cy="{{ point.y }}" r="4"><title>{{ point.date }} · {{ series.label }} · {{ "%.1f"|format(point.weight) }} kg</title></circle>{% endfor %}{% endif %}{% endfor %}
+      <text x="48" y="183">{{ lift.first_date }}</text><text x="620" y="183">{{ lift.last_date }}</text>
+    </svg>{% else %}<p class="empty" style="margin-top:12px">No weighted {{ lift.name|lower }} sets logged yet.</p>{% endif %}
+  </article>{% endfor %}
+  </div>
+</section>
 <section class="panel" id="workout-log">
-  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Log with ChatGPT</h2></div><span class="panel-kicker">iPhone Shortcut</span></div>
-  <p class="muted" style="margin:0 0 13px">Describe your session naturally. ChatGPT will structure it, show you what it understood, and ask before saving.</p>
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Log a workout</h2></div><span class="panel-kicker">On-device model</span></div>
+  <p class="muted" style="margin:0 0 13px">Write your session here. Your iPhone’s on-device model structures it; review the result in the Shortcut before saving.</p>
   <label for="workout-note">YOUR WORKOUT</label>
   <textarea id="workout-note" maxlength="4000" placeholder="Example: Squats 3 sets of 5 at 100 kg, then bench 3 × 8 at 60 kg."></textarea>
-  <button class="full-button" id="run-workout-shortcut" type="button" style="margin-top:12px">Continue in ChatGPT Shortcut</button>
-  <p class="panel-kicker" id="shortcut-handoff-status" role="status" style="margin:10px 0 0">Opens your “TimGym Upload” Shortcut. You can review before it saves.</p>
-  <p class="panel-kicker" style="margin:8px 0 0"><a href="https://github.com/timoteicioaba/TimGym/blob/main/SHORTCUT.md" target="_blank" rel="noopener">Set up the Shortcut once</a> · requires an Apple Intelligence-compatible iPhone.</p>
+  <button class="full-button" id="run-workout-shortcut" type="button" style="margin-top:12px">Continue in TimGym Upload</button>
+  <p class="panel-kicker" id="shortcut-handoff-status" role="status" style="margin:10px 0 0">Opens your private Shortcut. Review the workout before saving.</p>
+  <p class="panel-kicker" style="margin:8px 0 0"><a href="{{ url_for('connection') }}">Shortcut setup and connection</a></p>
 </section>
 <section class="panel" id="log">
   <details>
@@ -353,15 +372,9 @@ DASHBOARD = """
   </details>
 </section>
 <section class="panel" id="activity">
-  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Recent workouts</h2></div><span class="panel-kicker">Via ChatGPT</span></div>
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Recent workouts</h2></div><span class="panel-kicker">From your Shortcut</span></div>
   {% for row in workouts %}<div class="record"><span class="record-icon">↗</span><div class="record-main"><strong>{{ row.exercise }} <span class="muted">· {{ row.sets }} sets</span></strong><small>{{ row.set_summary }} · {{ row.workout_date }}{% if row.notes %} · {{ row.notes }}{% endif %}</small></div></div>
   {% else %}<p class="empty">Your workouts will show here after ChatGPT logs them.</p>{% endfor %}
-</section>
-<section class="panel" id="account">
-  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>ChatGPT connection</h2></div></div>
-  <p class="muted">Use a private key to connect your account to ChatGPT or an iPhone Shortcut. Keep it private.</p>
-  <form method="post" action="{{ url_for('create_api_key') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">Create or rotate personal key</button></form>
-  <p class="panel-kicker" style="margin:12px 0 0"><a href="{{ url_for('openapi_spec') }}">Action API specification</a></p>
 </section>
 <section class="panel">
   <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Body measurements</h2></div><span class="panel-kicker">Latest</span></div>
@@ -371,7 +384,7 @@ DASHBOARD = """
 <form method="post" action="{{ url_for('logout') }}" style="padding:0 2px"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">Sign out</button></form>
 </main>
 <nav class="bottom-nav" aria-label="Main navigation">
-<a href="#top">Home</a><a href="#trends">Trends</a><a href="#workout-log">Log</a><a href="#account">Account</a>
+<a href="#top">Home</a><a href="#lifts">Progress</a><a href="#workout-log">Log</a><a href="{{ url_for('connection') }}">Connect</a>
 </nav>
 <script>
 document.getElementById("run-workout-shortcut").addEventListener("click", function () {
@@ -390,6 +403,29 @@ document.getElementById("run-workout-shortcut").addEventListener("click", functi
 </script>
 """
 
+
+CONNECTION_PAGE = """
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090d0b"><title>Connection · TimGym</title>""" + BASE_STYLE + """</head>
+<body>
+<header class="topbar"><a href="{{ url_for('index') }}" class="brand"><span class="brand-mark">T</span><span>TimGym</span></a><div class="user-chip">{{ user.username }}</div></header>
+<main class="app-shell">
+{% for message in get_flashed_messages() %}<p class="flash">{{ message }}</p>{% endfor %}
+<section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Set up your iPhone Shortcut and personal TimGym key.</p></section>
+{% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new TimGym key</h2></div><p class="muted">Copy it now; it is shown only once. Anyone with this key can add workouts to your account.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
+<section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>On-device workout logging</h2></div></div>
+<p class="muted">The TimGym Upload Shortcut uses your iPhone’s on-device model to structure the workout. Review it in Shortcuts, then choose Save to send the workout to TimGym.</p>
+<p class="panel-kicker"><a href="https://github.com/timoteicioaba/TimGym/blob/main/SHORTCUT.md" target="_blank" rel="noopener">Open the iPhone Shortcut setup guide</a></p>
+</section>
+<section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Personal API key</h2></div></div>
+<p class="muted">The Shortcut uses this key to save workouts to your account. Keep it private. Rotating it will invalidate the previous key.</p>
+<form method="post" action="{{ url_for('create_api_key') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">Generate or rotate my key</button></form>
+<p class="panel-kicker" style="margin:12px 0 0"><a href="{{ url_for('openapi_spec') }}">API specification</a></p>
+</section>
+<a class="muted" href="{{ url_for('index') }}">← Back to training</a>
+</main>
+<nav class="bottom-nav" aria-label="Main navigation"><a href="{{ url_for('index') }}">Home</a><a href="{{ url_for('index') }}#lifts">Progress</a><a href="{{ url_for('index') }}#workout-log">Log</a><a href="{{ url_for('connection') }}">Connect</a></nav>
+</body></html>
+"""
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -466,6 +502,64 @@ def index():
         measurements[0]["weight_kg"] - measurements[1]["weight_kg"]
         if len(measurements) > 1 else None
     )
+    lift_defs = (("Squat", "squat"), ("Bench press", "bench"), ("Deadlift", "deadlift"))
+    range_defs = (("1–5 reps", 1, 5, "1"), ("6–10 reps", 6, 10, "2"), ("11+ reps", 11, 999, "3"))
+    raw_lift_rows = db.execute(
+        "SELECT workout_date, exercise, sets, reps, weight_kg, sets_json FROM workouts WHERE user_id = ? ORDER BY workout_date, id",
+        (g.user["id"],),
+    ).fetchall()
+    lift_charts = []
+    for lift_name, keyword in lift_defs:
+        grouped = {key: {} for _label, _low, _high, key in range_defs}
+        for row in raw_lift_rows:
+            if keyword not in row["exercise"].casefold():
+                continue
+            set_rows = json.loads(row["sets_json"]) if row["sets_json"] else [
+                {"reps": row["reps"], "weight_kg": row["weight_kg"]} for _ in range(row["sets"])
+            ]
+            for one in set_rows:
+                reps = int(one.get("reps") or 0)
+                weight = one.get("weight_kg")
+                if weight is None or reps < 1:
+                    continue
+                weight = float(weight)
+                for _label, low_reps, high_reps, key in range_defs:
+                    if low_reps <= reps <= high_reps:
+                        previous = grouped[key].get(row["workout_date"])
+                        grouped[key][row["workout_date"]] = max(previous, weight) if previous is not None else weight
+                        break
+        all_dates = sorted({workout_date for values in grouped.values() for workout_date in values})
+        all_weights = [weight for values in grouped.values() for weight in values.values()]
+        has_data = bool(all_weights)
+        if has_data:
+            actual_low, actual_high = min(all_weights), max(all_weights)
+            padding = max((actual_high - actual_low) * 0.12, 1.0)
+            chart_low = max(0.0, actual_low - padding)
+            chart_high = actual_high + padding
+            date_positions = {workout_date: 48 + 632 * index / max(len(all_dates) - 1, 1) for index, workout_date in enumerate(all_dates)}
+            if len(all_dates) == 1:
+                date_positions[all_dates[0]] = 364
+            series = []
+            for label, _low, _high, key in range_defs:
+                points = []
+                for workout_date in sorted(grouped[key]):
+                    weight = grouped[key][workout_date]
+                    y = 154 - 112 * (weight - chart_low) / (chart_high - chart_low)
+                    points.append({"x": round(date_positions[workout_date], 1), "y": round(y, 1), "weight": weight, "date": workout_date})
+                series.append({
+                    "key": key, "label": label, "points": points,
+                    "polyline": " ".join(f'{point["x"]},{point["y"]}' for point in points),
+                })
+            first_date, last_date = all_dates[0], all_dates[-1]
+        else:
+            chart_low = chart_high = None
+            series = []
+            first_date = last_date = None
+        lift_charts.append({
+            "name": lift_name, "series": series, "has_data": has_data,
+            "chart_min": chart_low, "chart_max": chart_high,
+            "first_date": first_date, "last_date": last_date,
+        })
     week_count = db.execute(
         "SELECT COUNT(*) FROM workouts WHERE user_id = ? AND workout_date >= date('now', '-6 days')",
         (g.user["id"],),
@@ -475,8 +569,14 @@ def index():
         today_label=date.today().strftime("%A · %B %d"),
         latest_weight=latest_weight, weight_change=weight_change, week_count=week_count,
         workouts=workouts, measurements=measurements, chart_points=chart_points,
-        chart_min=chart_min, chart_max=chart_max, chart_polyline=polyline,
+        chart_min=chart_min, chart_max=chart_max, chart_polyline=polyline, lift_charts=lift_charts,
     )
+
+
+@app.get("/connection")
+@login_required
+def connection():
+    return render_template_string(CONNECTION_PAGE, user=g.user, csrf=csrf_token(), new_api_key=None)
 
 
 @app.post("/measurements")
@@ -516,12 +616,7 @@ def create_api_key():
         (g.user["id"], digest),
     )
     db.commit()
-    return render_template_string(
-        DASHBOARD, user=g.user, csrf=csrf_token(), new_api_key=token, today=date.today().isoformat(),
-        today_label=date.today().strftime("%A · %B %d"),
-        latest_weight=None, weight_change=None, week_count=0,
-        workouts=[], measurements=[], chart_points=[], chart_min=None, chart_max=None, chart_polyline="",
-    )
+    return render_template_string(CONNECTION_PAGE, user=g.user, csrf=csrf_token(), new_api_key=token)
 
 
 @app.get("/api/workouts")
