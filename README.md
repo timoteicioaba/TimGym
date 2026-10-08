@@ -7,7 +7,7 @@ A self-hosted personal workout and body-measurement tracker. Each account has pr
 From the folder containing `compose.yaml`, run:
 
 ```sh
-docker compose up -d --build
+docker compose up -d --build --remove-orphans
 ```
 
 Open `https://gym.tim0tei.fun` (or your server address). Workout interpretation runs locally in the app and does not download a model.
