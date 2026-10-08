@@ -32,7 +32,7 @@ docker compose exec timgym python app.py list-users
 
 ## Log workouts with the local parser
 
-Type a workout on the dashboard and choose **Parse workout**. TimGym recognizes common forms such as `Squat 3x5 @ 80 kg`, `Bench press: 3 sets of 8 at 60 lb`, and separate exercises divided by a comma, semicolon, or “then”. It converts pounds to kilograms, supports multiple set prescriptions for an exercise, and asks for clarification when the note is ambiguous. Review the preview and save only when it looks right.
+Type a workout on the dashboard and choose **Parse workout**. TimGym recognizes common forms such as `Squat 3x5 @ 80 kg`, `Bench press: 3 sets of 8 at 60 lb`, and separate exercises divided by a comma, semicolon, or “then”. It converts pounds to kilograms and supports multiple set prescriptions. Recognizable exercises still appear when sets or reps are missing, with fields to fill in directly in the preview. Review the result and save only when it looks right.
 
 Parsing runs in the TimGym app itself. Workout notes are not sent to an AI service, no model is downloaded, and there is no extra API cost. Keep one exercise per clause for the clearest result.
 
