@@ -1,12 +1,12 @@
 # TimGym Upload iPhone Shortcut
 
-This shortcut takes workout text from TimGym, structures it with your iPhone’s on-device model, lets you review it, then sends it to your private TimGym account. It does not use the ChatGPT model or OpenAI API, so there is no API billing.
+This is an optional iPhone Shortcut workflow. The main TimGym dashboard now interprets workouts with a local model on your CasaOS server, so you do not need this Shortcut to log workouts. This alternate workflow uses your iPhone’s on-device model and sends the reviewed workout to your TimGym account.
 
 ## Requirements
 
 - iPhone with the Shortcuts app and an available on-device model.
 - A TimGym account and its personal API key. Create or rotate it on the **Connection** page in TimGym.
-- Use Safari at `https://gym.tim0tei.fun`; the app's **Continue in TimGym Upload** button launches the shortcut by name and passes the text.
+- Open the shortcut in Shortcuts and provide workout text as its input. The dashboard no longer launches this optional shortcut.
 
 Apple documents the `shortcuts://run-shortcut` handoff URL [here](https://support.apple.com/en-au/guide/shortcuts/apd624386f42/ios).
 
@@ -47,9 +47,8 @@ Replace `YOUR_PERSONAL_TIMGYM_KEY` with the key shown by TimGym. Keep this short
 
 ## Use it
 
-1. Open TimGym on iPhone Safari and sign in.
-2. Type a workout in **Log a workout**.
-3. Tap **Continue in TimGym Upload**.
-4. Check the structured workout in the Shortcut and choose **Save to TimGym**.
+1. Open the **TimGym Upload** shortcut in Shortcuts.
+2. Provide workout text as the shortcut input, such as by selecting text and sharing it to the shortcut.
+3. Check the structured workout and choose **Save to TimGym**.
 
 If the shortcut isn't installed yet, the first tap may only show that the shortcut can't be found. Create it with the exact name above, then return to TimGym and tap again.
