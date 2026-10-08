@@ -11,7 +11,7 @@ from functools import wraps
 from getpass import getpass
 from pathlib import Path
 
-from flask import Flask, abort, flash, g, redirect, render_template_string, request, session, url_for
+from flask import Flask, abort, flash, g, redirect, render_template_string, request, send_file, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", "data/timgym.db"))
@@ -459,7 +459,7 @@ def api_me():
 
 @app.get("/openapi.yaml")
 def openapi_spec():
-    return app.send_static_file("openapi.yaml")
+    return send_file(Path(__file__).with_name("openapi.yaml"), mimetype="application/yaml")
 
 
 def create_user(username, password):
