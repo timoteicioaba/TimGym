@@ -412,7 +412,7 @@ const saveButton = document.getElementById("save-workout");
 function updateSaveAvailability() {
   const exercises = pendingWorkout?.exercises || [];
   const complete = exercises.length > 0 && exercises.every(exercise =>
-    exercise.sets.length > 0 && exercise.sets.every(set =>
+    !exercise._invalidWeight && exercise.sets.length > 0 && exercise.sets.every(set =>
       Number.isInteger(Number(set.reps)) && Number(set.reps) >= 1 && Number(set.reps) <= 999 &&
       (set.weight_kg === null || set.weight_kg === undefined ||
         (Number.isFinite(Number(set.weight_kg)) && Number(set.weight_kg) >= 0 && Number(set.weight_kg) <= 2000))
@@ -491,13 +491,14 @@ interpretButton.addEventListener("click", async function () {
         fields.append(setsInput, repsInput, weightInput);
         item.append(fields);
         const syncFields = () => {
-          const count = Number.parseInt(setsInput.value, 10);
-          const reps = Number.parseInt(repsInput.value, 10);
+          const count = Number(setsInput.value);
+          const reps = Number(repsInput.value);
           const weight = weightInput.value === "" ? null : Number(weightInput.value);
+          exercise._invalidWeight = weight !== null && (!Number.isFinite(weight) || weight < 0 || weight > 2000);
           exercise.sets = Number.isInteger(count) && count >= 1 && count <= 99
             ? Array.from({length: count}, () => ({
                 reps: Number.isInteger(reps) && reps >= 1 && reps <= 999 ? reps : null,
-                weight_kg: Number.isFinite(weight) && weight >= 0 && weight <= 2000 ? weight : null
+                weight_kg: weight !== null && Number.isFinite(weight) && weight >= 0 && weight <= 2000 ? weight : null
               }))
             : [];
           updateSaveAvailability();
@@ -522,7 +523,7 @@ interpretButton.addEventListener("click", async function () {
           if (set.reps === null || set.reps === undefined) {
             row.append(repsInput);
             repsInput.addEventListener("input", () => {
-              const value = Number.parseInt(repsInput.value, 10);
+              const value = Number(repsInput.value);
               set.reps = Number.isInteger(value) && value >= 1 && value <= 999 ? value : null;
               updateSaveAvailability();
             });
@@ -547,7 +548,10 @@ interpretButton.addEventListener("click", async function () {
             weightInput.setAttribute("aria-label", exercise.name + " set " + (index + 1) + " weight in kg");
             row.append(weightInput);
             weightInput.addEventListener("input", () => {
-              set.weight_kg = weightInput.value === "" ? null : Number(weightInput.value);
+              const value = weightInput.value === "" ? null : Number(weightInput.value);
+              exercise._invalidWeight = value !== null && (!Number.isFinite(value) || value < 0 || value > 2000);
+              set.weight_kg = value !== null && !exercise._invalidWeight ? value : null;
+              updateSaveAvailability();
             });
           }
           item.append(row);
