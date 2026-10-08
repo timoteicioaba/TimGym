@@ -415,9 +415,9 @@ DASHBOARD = """
   </details>
 </section>
 <section class="panel" id="activity">
-  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Recent workouts</h2></div><span class="panel-kicker">From your Shortcut</span></div>
+  <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Recent workouts</h2></div><span class="panel-kicker">Your training log</span></div>
   {% for row in workouts %}<div class="record"><span class="record-icon">↗</span><div class="record-main"><strong>{{ row.exercise }} <span class="muted">· {{ row.sets }} sets</span></strong><small>{{ row.set_summary }} · {{ row.workout_date }}{% if row.notes %} · {{ row.notes }}{% endif %}</small></div></div>
-  {% else %}<p class="empty">Your workouts will show here after ChatGPT logs them.</p>{% endfor %}
+  {% else %}<p class="empty">Your saved workouts will appear here.</p>{% endfor %}
 </section>
 <section class="panel">
   <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Body measurements</h2></div><span class="panel-kicker">Latest</span></div>
