@@ -599,7 +599,7 @@ CONNECTION_PAGE = """
 <p class="muted">TimGym uses Qwen 3.5 2B through Ollama on this server. The workout note is interpreted on your CasaOS machine; it is saved only after you review and confirm it. No ChatGPT or OpenAI API is used for this flow.</p>
 <p class="panel-kicker">Model: qwen3.5:2b · CPU inference · first setup downloads about 3 GB</p>
 <div style="margin-top:14px"><button class="secondary full-button" id="check-model" type="button">Check model status</button><p class="panel-kicker" id="model-status-text" role="status" aria-live="polite" style="margin:10px 0 0">Checking local model…</p><pre class="diagnostics" id="model-diagnostics" hidden></pre>
-<button class="secondary full-button" id="test-model" type="button" style="margin-top:10px">Run a model test</button><p class="panel-kicker" id="model-test-status" role="status" aria-live="polite" style="margin:8px 0 0">Sends a short test prompt to the local model and reports its timings.</p><pre class="diagnostics" id="model-test-output" hidden></pre></div>
+<button class="secondary full-button" id="test-model" type="button" style="margin-top:10px">Run a sample workout test</button><p class="panel-kicker" id="model-test-status" role="status" aria-live="polite" style="margin:8px 0 0">Checks whether the model can structure a squat and bench session. Nothing is saved.</p><pre class="diagnostics" id="model-test-output" hidden></pre></div>
 </section>
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Optional ChatGPT connection</h2></div></div>
 <p class="muted">This personal key is only needed for a custom GPT Action or a separate iPhone Shortcut. The local server model does not use it. Keep it private; rotating it invalidates the previous key.</p>
@@ -649,7 +649,13 @@ testModelButton.addEventListener("click", async function () {
                 "Accept": "application/json"},
       body: JSON.stringify({})
     });
-    const details = await response.json();
+    const responseText = await response.text();
+    let details;
+    try {
+      details = JSON.parse(responseText);
+    } catch (_parseError) {
+      details = {error: "Server returned HTTP " + response.status + " with a non-JSON response.", response_preview: responseText.slice(0, 800)};
+    }
     modelTestOutput.textContent = JSON.stringify(details, null, 2);
     modelTestOutput.hidden = false;
     modelTestStatus.textContent = response.ok && details.ok
@@ -1128,6 +1134,13 @@ def workout_model_test():
     except (json.JSONDecodeError, ValueError, TypeError) as exc:
         app.logger.exception("Ollama model test response was invalid")
         return {"ok": False, "model": OLLAMA_MODEL, "error": f"Invalid response from Ollama: {exc}"}, 502
+    except Exception as exc:
+        request_id = secrets.token_hex(4)
+        app.logger.exception("Unexpected local model test failure request_id=%s", request_id)
+        return {
+            "ok": False, "model": OLLAMA_MODEL, "request_id": request_id,
+            "error": f"Unexpected local model test failure ({type(exc).__name__}): {exc}",
+        }, 500
 
 
 @app.get("/workouts/model-status")
