@@ -18,7 +18,9 @@ Add these actions in order:
 
 1. **Use Model**
    - Choose **ChatGPT**.
-   - Prompt it to parse the provided shortcut input into one JSON object only, with no Markdown fences:
+   - Turn on **Follow Up** so ChatGPT can ask for missing reps, sets, or weights before creating the workout.
+   - In the prompt below, replace `[Shortcut Input]` with the blue **Shortcut Input** magic variable from the Shortcuts variable picker.
+   - Ask it to parse the provided input into one JSON object only, with no Markdown fences:
      ```text
      Turn this workout note into TimGym workout JSON. Return only valid JSON, no code fences or commentary. Do not invent sets, reps, weights, or RPE. If a value is missing, use null where the schema allows it, and ask me to clarify before upload if required information is missing. Use today's date if no date is given.
      Required shape:
