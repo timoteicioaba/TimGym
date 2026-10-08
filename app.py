@@ -10,6 +10,8 @@ from datetime import date, timedelta
 from functools import wraps
 from getpass import getpass
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from flask import Flask, abort, flash, g, redirect, render_template_string, request, send_file, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -59,6 +61,41 @@ def load_secret_key():
 
 
 app.secret_key = load_secret_key()
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama:11434").rstrip("/")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:2b")
+WORKOUT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "date": {"type": "string"},
+        "exercises": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "notes": {"type": "string"},
+                    "sets": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "reps": {"type": ["integer", "null"]},
+                                "weight_kg": {"type": ["number", "null"]},
+                            },
+                            "required": ["reps", "weight_kg"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["name", "notes", "sets"],
+                "additionalProperties": False,
+            },
+        },
+        "clarification": {"type": ["string", "null"]},
+    },
+    "required": ["date", "exercises", "clarification"],
+    "additionalProperties": False,
+}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -150,7 +187,7 @@ def csrf_token():
 
 def valid_csrf():
     expected = session.get("_csrf", "")
-    actual = request.form.get("_csrf", "")
+    actual = request.form.get("_csrf", "") or request.headers.get("X-CSRF-Token", "")
     return bool(expected and actual and secrets.compare_digest(expected, actual))
 
 
@@ -245,6 +282,7 @@ a:hover{text-decoration:underline}
 .chart-line.range-1{stroke:#c7f36a}.chart-line.range-2{stroke:#75c8ff}.chart-line.range-3{stroke:#c69cff}
 .chart-point.range-1{fill:#c7f36a}.chart-point.range-2{fill:#75c8ff}.chart-point.range-3{fill:#c69cff}
 .lift-trends{display:grid;gap:14px}.lift-card{padding:14px;border:1px solid #28342d;border-radius:15px;background:#0c120f}.lift-card h3{margin:0;font-size:.96rem;letter-spacing:-.02em}.range-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 0;color:var(--muted);font-size:.72rem}.range-legend span{display:flex;align-items:center;gap:5px}.legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-dot.range-1{background:#c7f36a}.legend-dot.range-2{background:#75c8ff}.legend-dot.range-3{background:#c69cff}
+.workout-preview{margin-top:14px;padding:14px;border:1px solid #3a4b3d;border-radius:14px;background:#0b100d}.workout-preview h3{margin:0 0 10px;font-size:.95rem}.preview-exercise{padding:10px 0;border-top:1px solid #253029}.preview-exercise:first-child{border-top:0;padding-top:0}.preview-exercise strong{display:block}.preview-exercise small{display:block;color:var(--muted);margin-top:4px}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:13px}
 .fields.three{grid-template-columns:repeat(2,minmax(0,1fr))}
 label{display:block;color:var(--muted);font-size:.78rem;font-weight:600;margin:0 0 6px}
@@ -351,9 +389,14 @@ DASHBOARD = """
   <p class="muted" style="margin:0 0 13px">Write your session here. Your iPhone’s on-device model structures it; review the result in the Shortcut before saving.</p>
   <label for="workout-note">YOUR WORKOUT</label>
   <textarea id="workout-note" maxlength="4000" placeholder="Example: Squats 3 sets of 5 at 100 kg, then bench 3 × 8 at 60 kg."></textarea>
-  <button class="full-button" id="run-workout-shortcut" type="button" style="margin-top:12px">Continue in TimGym Upload</button>
-  <p class="panel-kicker" id="shortcut-handoff-status" role="status" style="margin:10px 0 0">Opens your private Shortcut. Review the workout before saving.</p>
-  <p class="panel-kicker" style="margin:8px 0 0"><a href="{{ url_for('connection') }}">Shortcut setup and connection</a></p>
+  <button class="full-button" id="interpret-workout" type="button" style="margin-top:12px">Interpret workout locally</button>
+  <div class="workout-preview" id="workout-preview" hidden>
+    <h3>Review before saving</h3>
+    <div id="workout-preview-content"></div>
+    <button class="full-button" id="save-workout" type="button" style="margin-top:12px">Save workout</button>
+  </div>
+  <p class="panel-kicker" id="workout-ai-status" role="status" aria-live="polite" style="margin:10px 0 0">Your note is interpreted by the private model running on this server.</p>
+  <p class="panel-kicker" style="margin:8px 0 0"><a href="{{ url_for('connection') }}">Model and connection settings</a></p>
 </section>
 <section class="panel" id="log">
   <details>
@@ -386,18 +429,85 @@ DASHBOARD = """
 <a href="#top">Home</a><a href="#lifts">Progress</a><a href="#workout-log">Log</a><a href="{{ url_for('connection') }}">Connect</a>
 </nav>
 <script>
-document.getElementById("run-workout-shortcut").addEventListener("click", function () {
-  const workout = document.getElementById("workout-note").value.trim();
-  const status = document.getElementById("shortcut-handoff-status");
-  if (!workout) {
+const csrfToken = {{ csrf|tojson }};
+let pendingWorkout = null;
+const noteField = document.getElementById("workout-note");
+const status = document.getElementById("workout-ai-status");
+const preview = document.getElementById("workout-preview");
+const previewContent = document.getElementById("workout-preview-content");
+const interpretButton = document.getElementById("interpret-workout");
+const saveButton = document.getElementById("save-workout");
+
+interpretButton.addEventListener("click", async function () {
+  const note = noteField.value.trim();
+  if (!note) {
     status.textContent = "Write a workout first.";
     return;
   }
-  const shortcutUrl = "shortcuts://run-shortcut?name="
-    + encodeURIComponent("TimGym Upload")
-    + "&input=text&text=" + encodeURIComponent(workout);
-  status.textContent = "Opening TimGym Upload…";
-  window.location.href = shortcutUrl;
+  interpretButton.disabled = true;
+  saveButton.disabled = true;
+  preview.hidden = true;
+  pendingWorkout = null;
+  status.textContent = "Interpreting on your server…";
+  try {
+    const response = await fetch("{{ url_for('interpret_workout') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+      body: JSON.stringify({note: note})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not interpret this workout.");
+    if (result.clarification) {
+      status.textContent = result.clarification + " Add the missing details and try again.";
+      return;
+    }
+    pendingWorkout = result.workout;
+    previewContent.replaceChildren();
+    for (const exercise of pendingWorkout.exercises) {
+      const item = document.createElement("div");
+      item.className = "preview-exercise";
+      const name = document.createElement("strong");
+      name.textContent = exercise.name;
+      const details = document.createElement("small");
+      details.textContent = exercise.sets.map(set =>
+        set.reps + " reps" + (set.weight_kg === null ? "" : " × " + set.weight_kg + " kg")
+      ).join(" · ");
+      item.append(name, details);
+      if (exercise.notes) {
+        const notes = document.createElement("small");
+        notes.textContent = exercise.notes;
+        item.append(notes);
+      }
+      previewContent.append(item);
+    }
+    preview.hidden = false;
+    saveButton.disabled = false;
+    status.textContent = "Check the details, then save when they look right.";
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    interpretButton.disabled = false;
+  }
+});
+
+saveButton.addEventListener("click", async function () {
+  if (!pendingWorkout) return;
+  saveButton.disabled = true;
+  status.textContent = "Saving workout…";
+  try {
+    const response = await fetch("{{ url_for('save_web_workout') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+      body: JSON.stringify(pendingWorkout)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not save workout.");
+    status.textContent = "Workout saved.";
+    window.location.reload();
+  } catch (error) {
+    saveButton.disabled = false;
+    status.textContent = error.message;
+  }
 });
 </script>
 """
@@ -618,6 +728,154 @@ def create_api_key():
     return render_template_string(CONNECTION_PAGE, user=g.user, csrf=csrf_token(), new_api_key=token)
 
 
+def normalize_workout_payload(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Send a JSON object.")
+    workout_date = valid_date(payload.get("date") or date.today().isoformat())
+    exercises = payload.get("exercises")
+    if not isinstance(exercises, list) or not 1 <= len(exercises) <= 30:
+        raise ValueError("Include between 1 and 30 exercises.")
+    normalized_exercises = []
+    for exercise in exercises:
+        if not isinstance(exercise, dict):
+            raise ValueError("Each exercise must be an object.")
+        name = str(exercise.get("name", "")).strip()
+        sets = exercise.get("sets")
+        if not name or len(name) > 80:
+            raise ValueError("Each exercise needs a name of at most 80 characters.")
+        if not isinstance(sets, list) or not 1 <= len(sets) <= 99:
+            raise ValueError(f"Provide one or more sets for {name}.")
+        normalized = []
+        for one in sets:
+            if not isinstance(one, dict):
+                raise ValueError("Each set must include reps and may include weight_kg and rpe.")
+            if one.get("reps") is None:
+                raise ValueError(f"Add the reps for {name} before saving.")
+            try:
+                reps = int(one.get("reps", 0))
+            except (ValueError, TypeError) as exc:
+                raise ValueError("Reps must be a number.") from exc
+            if not 1 <= reps <= 999:
+                raise ValueError("Reps must be between 1 and 999.")
+            weight = number(one.get("weight_kg"), "Weight", 2000)
+            rpe = number(one.get("rpe"), "RPE", 10, 0)
+            if rpe is not None and rpe < 1:
+                raise ValueError("RPE must be between 1 and 10.")
+            normalized.append({"reps": reps, "weight_kg": weight, "rpe": rpe})
+        normalized_exercises.append({
+            "name": name,
+            "notes": str(exercise.get("notes", "")).strip()[:500],
+            "sets": normalized,
+        })
+    return workout_date, normalized_exercises
+
+
+def persist_workout(workout_date, exercises, user_id):
+    session_id = str(uuid.uuid4())
+    rows = []
+    for exercise in exercises:
+        first = exercise["sets"][0]
+        rows.append((
+            user_id, session_id, workout_date, exercise["name"], len(exercise["sets"]),
+            first["reps"], first["weight_kg"], exercise["notes"], json.dumps(exercise["sets"]),
+        ))
+    db = get_db()
+    db.executemany(
+        """INSERT INTO workouts
+           (user_id, session_id, workout_date, exercise, sets, reps, weight_kg, notes, sets_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        rows,
+    )
+    db.commit()
+    return {"workout_id": session_id, "date": workout_date, "exercises_saved": len(rows)}
+
+
+def interpret_workout_note(note):
+    payload = {
+        "model": OLLAMA_MODEL,
+        "stream": False,
+        "format": WORKOUT_RESPONSE_SCHEMA,
+        "options": {"temperature": 0},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Convert the user's workout note into the requested workout JSON. "
+                    "Today's date is " + date.today().isoformat() + ". "
+                    "Use that date when none is given. Never invent exercises, set counts, repetitions, or weights. "
+                    "Weight is in kilograms; convert pounds to kilograms if the user explicitly uses pounds. "
+                    "If the note does not contain enough detail to create at least one exercise with a name, set count, and reps, "
+                    "set clarification to one short question and set exercises to an empty list. "
+                    "Weight may be null when the user does not provide it or the exercise is bodyweight. "
+                    "Keep notes empty unless the user wrote a note. Do not add RPE, estimated 1RM, volume, summaries, or coaching advice."
+                ),
+            },
+            {"role": "user", "content": note},
+        ],
+    }
+    body = json.dumps(payload).encode("utf-8")
+    req = Request(
+        OLLAMA_URL + "/api/chat",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(req, timeout=180) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    content = result.get("message", {}).get("content", "")
+    parsed = json.loads(content)
+    if not isinstance(parsed, dict):
+        raise ValueError("The local model did not return a workout object.")
+    clarification = str(parsed.get("clarification") or "").strip()
+    if clarification:
+        return {"clarification": clarification}
+    workout_date, exercises = normalize_workout_payload(parsed)
+    clean_exercises = []
+    for exercise in exercises:
+        clean_exercises.append({
+            "name": exercise["name"],
+            "notes": exercise["notes"],
+            "sets": [
+                {"reps": one["reps"], "weight_kg": one["weight_kg"]}
+                for one in exercise["sets"]
+            ],
+        })
+    return {"workout": {"date": workout_date, "exercises": clean_exercises}}
+
+
+@app.post("/workouts/interpret")
+@login_required
+def interpret_workout():
+    if not valid_csrf():
+        return {"error": "Your session expired. Refresh the page and try again."}, 400
+    payload = request.get_json(silent=True) or {}
+    note = str(payload.get("note", "")).strip()
+    if not note:
+        return {"error": "Write a workout first."}, 400
+    if len(note) > 4000:
+        return {"error": "Keep the workout note under 4,000 characters."}, 400
+    try:
+        return interpret_workout_note(note)
+    except HTTPError as exc:
+        return {"error": "The local model could not process that workout. Try again shortly."}, 502
+    except (URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        return {"error": "The local workout model is unavailable or returned an invalid result. Try again shortly."}, 503
+
+
+@app.post("/workouts/save")
+@login_required
+def save_web_workout():
+    if not valid_csrf():
+        return {"error": "Your session expired. Refresh the page and try again."}, 400
+    payload = request.get_json(silent=True)
+    try:
+        workout_date, exercises = normalize_workout_payload(payload)
+        result = persist_workout(workout_date, exercises, g.user["id"])
+        return result, 201
+    except ValueError as exc:
+        return {"error": str(exc)}, 400
+
+
 @app.get("/api/workouts")
 @api_key_required
 def api_list_workouts():
@@ -646,49 +904,9 @@ def api_list_workouts():
 @api_key_required
 def api_add_workout():
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return {"error": "Send a JSON object."}, 400
     try:
-        workout_date = valid_date(payload.get("date") or date.today().isoformat())
-        exercises = payload.get("exercises")
-        if not isinstance(exercises, list) or not 1 <= len(exercises) <= 30:
-            raise ValueError("Include between 1 and 30 exercises.")
-        session_id = str(uuid.uuid4())
-        rows = []
-        for exercise in exercises:
-            if not isinstance(exercise, dict):
-                raise ValueError("Each exercise must be an object.")
-            name = str(exercise.get("name", "")).strip()
-            sets = exercise.get("sets")
-            if not name or len(name) > 80:
-                raise ValueError("Each exercise needs a name of at most 80 characters.")
-            if not isinstance(sets, list) or not 1 <= len(sets) <= 99:
-                raise ValueError(f"Provide one or more sets for {name}.")
-            normalized = []
-            for one in sets:
-                if not isinstance(one, dict):
-                    raise ValueError("Each set must include reps and may include weight_kg and rpe.")
-                reps = int(one.get("reps", 0))
-                if not 1 <= reps <= 999:
-                    raise ValueError("Reps must be between 1 and 999.")
-                weight = number(one.get("weight_kg"), "Weight", 2000)
-                rpe = number(one.get("rpe"), "RPE", 10, 0)
-                if rpe is not None and rpe < 1:
-                    raise ValueError("RPE must be between 1 and 10.")
-                normalized.append({"reps": reps, "weight_kg": weight, "rpe": rpe})
-            first = normalized[0]
-            notes = str(exercise.get("notes", "")).strip()[:500]
-            rows.append((g.api_user["id"], session_id, workout_date, name, len(normalized),
-                         first["reps"], first["weight_kg"], notes, json.dumps(normalized)))
-        db = get_db()
-        db.executemany(
-            """INSERT INTO workouts
-               (user_id, session_id, workout_date, exercise, sets, reps, weight_kg, notes, sets_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            rows,
-        )
-        db.commit()
-        return {"workout_id": session_id, "date": workout_date, "exercises_saved": len(rows)}, 201
+        workout_date, exercises = normalize_workout_payload(payload)
+        return persist_workout(workout_date, exercises, g.api_user["id"]), 201
     except (ValueError, TypeError) as exc:
         return {"error": str(exc)}, 400
 
