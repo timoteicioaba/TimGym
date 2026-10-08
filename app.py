@@ -505,7 +505,7 @@ CONNECTION_PAGE = """
 <header class="topbar"><a href="{{ url_for('index') }}" class="brand"><span class="brand-mark">T</span><span>TimGym</span></a><div class="user-chip">{{ user.username }}</div></header>
 <main class="app-shell">
 {% for message in get_flashed_messages() %}<p class="flash">{{ message }}</p>{% endfor %}
-<section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Local model status and optional integrations.</p></section>
+<section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Fast local parsing and optional integrations.</p></section>
 {% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new TimGym key</h2></div><p class="muted">Copy it now; it is shown only once. Anyone with this key can add workouts to your account.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Workout parser</h2></div></div>
 <p class="muted">Workout notes are interpreted by a deterministic parser running in TimGym. It recognizes common phrasing, including “Squat 3x5 @ 80 kg”, “Bench press: 3 sets of 8 at 60 lb”, and multiple exercises separated by commas, semicolons, or “then”. Pounds are converted to kilograms. It asks for clarification instead of guessing when the note is ambiguous.</p>
