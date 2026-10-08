@@ -413,7 +413,7 @@ function updateSaveAvailability() {
   const exercises = pendingWorkout?.exercises || [];
   const complete = exercises.length > 0 && exercises.every(exercise =>
     !exercise._invalidWeight && exercise.sets.length > 0 && exercise.sets.every(set =>
-      Number.isInteger(Number(set.reps)) && Number(set.reps) >= 1 && Number(set.reps) <= 999 &&
+      !set._invalidWeight && Number.isInteger(Number(set.reps)) && Number(set.reps) >= 1 && Number(set.reps) <= 999 &&
       (set.weight_kg === null || set.weight_kg === undefined ||
         (Number.isFinite(Number(set.weight_kg)) && Number(set.weight_kg) >= 0 && Number(set.weight_kg) <= 2000))
     )
@@ -549,8 +549,8 @@ interpretButton.addEventListener("click", async function () {
             row.append(weightInput);
             weightInput.addEventListener("input", () => {
               const value = weightInput.value === "" ? null : Number(weightInput.value);
-              exercise._invalidWeight = value !== null && (!Number.isFinite(value) || value < 0 || value > 2000);
-              set.weight_kg = value !== null && !exercise._invalidWeight ? value : null;
+              set._invalidWeight = value !== null && (!Number.isFinite(value) || value < 0 || value > 2000);
+              set.weight_kg = value !== null && !set._invalidWeight ? value : null;
               updateSaveAvailability();
             });
           }
@@ -565,7 +565,6 @@ interpretButton.addEventListener("click", async function () {
       }
       previewContent.append(item);
     }
-    updateSaveAvailability();
     preview.hidden = false;
     updateSaveAvailability();
   } catch (error) {
