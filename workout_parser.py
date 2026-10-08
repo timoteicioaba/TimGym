@@ -196,7 +196,11 @@ def parse_workout_note(note):
                 "start": set_count_match.start(), "end": set_count_match.end(),
                 "sets": set_count, "reps": None,
             }]
-            rows = [{"reps": None, "weight_kg": None} for _ in range(set_count)]
+            set_weight = min(usable_weights, key=lambda item: abs(item.start() - set_count_match.end()), default=None)
+            rows = [
+                {"reps": None, "weight_kg": _weight_kg(set_weight) if set_weight else None}
+                for _ in range(set_count)
+            ]
             missing_fields = ["reps"]
         else:
             prescriptions_for_name = []
@@ -213,8 +217,10 @@ def parse_workout_note(note):
         name = _exercise_name(segment, prescriptions_for_name, weights)
         if not name:
             continue
+        default_weight = _weight_kg(usable_weights[0]) if not rows and len(usable_weights) == 1 else None
         parsed.append({
             "name": name[0].upper() + name[1:],
+            "default_weight_kg": default_weight,
             "notes": (
                 "Enter a positive load or leave it blank for an assisted exercise."
                 if negative_weight else ""
