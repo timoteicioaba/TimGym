@@ -493,6 +493,15 @@ interpretButton.addEventListener("click", async function () {
   }
 });
 
+noteField.addEventListener("input", function () {
+  if (pendingWorkout) {
+    pendingWorkout = null;
+    preview.hidden = true;
+    saveButton.disabled = true;
+    status.textContent = "Workout text changed. Interpret it again before saving.";
+  }
+});
+
 saveButton.addEventListener("click", async function () {
   if (!pendingWorkout) return;
   saveButton.disabled = true;
@@ -806,6 +815,7 @@ def interpret_workout_note(note):
                     "Convert the user's workout note into the requested workout JSON. "
                     "Today's date is " + date.today().isoformat() + ". "
                     "Use that date when none is given. Never invent exercises, set counts, repetitions, or weights. "
+                    "Represent every set as its own item. For example, three sets of five at 100 kg means three set objects with reps 5 and weight_kg 100. "
                     "Weight is in kilograms; convert pounds to kilograms if the user explicitly uses pounds. "
                     "If the note does not contain enough detail to create at least one exercise with a name, set count, and reps, "
                     "set clarification to one short question and set exercises to an empty list. "
