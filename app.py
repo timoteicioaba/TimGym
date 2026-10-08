@@ -487,6 +487,7 @@ interpretButton.addEventListener("click", async function () {
         weightInput.max = "2000";
         weightInput.step = "0.1";
         weightInput.placeholder = "Weight kg (optional)";
+        weightInput.value = exercise.default_weight_kg ?? "";
         weightInput.setAttribute("aria-label", exercise.name + " weight in kg (optional)");
         fields.append(setsInput, repsInput, weightInput);
         item.append(fields);
@@ -908,6 +909,7 @@ def interpret_workout():
                 {
                     "name": exercise["name"],
                     "notes": exercise["notes"],
+                    "default_weight_kg": exercise["default_weight_kg"],
                     "sets": exercise["sets"],
                     "missing_fields": exercise["missing_fields"],
                 }
