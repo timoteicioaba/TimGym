@@ -335,6 +335,7 @@ DASHBOARD = """
   <textarea id="workout-note" maxlength="4000" placeholder="Example: Squats 3 sets of 5 at 100 kg, then bench 3 × 8 at 60 kg."></textarea>
   <button class="full-button" id="run-workout-shortcut" type="button" style="margin-top:12px">Continue in ChatGPT Shortcut</button>
   <p class="panel-kicker" id="shortcut-handoff-status" role="status" style="margin:10px 0 0">Opens your “TimGym Upload” Shortcut. You can review before it saves.</p>
+  <p class="panel-kicker" style="margin:8px 0 0"><a href="https://github.com/timoteicioaba/TimGym/blob/main/SHORTCUT.md" target="_blank" rel="noopener">Set up the Shortcut once</a> · requires an Apple Intelligence-compatible iPhone.</p>
 </section>
 <section class="panel" id="log">
   <details>
