@@ -652,8 +652,8 @@ testModelButton.addEventListener("click", async function () {
     const details = await response.json();
     modelTestOutput.textContent = JSON.stringify(details, null, 2);
     modelTestOutput.hidden = false;
-    modelTestStatus.textContent = response.ok
-      ? "Test succeeded. Ollama generated a response."
+    modelTestStatus.textContent = response.ok && details.ok
+      ? "Test succeeded. The model interpreted the sample workout."
       : "Test failed: " + (details.error || "unknown error");
     checkModel();
   } catch (error) {
