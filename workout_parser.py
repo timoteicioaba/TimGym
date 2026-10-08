@@ -8,45 +8,45 @@ from datetime import date, timedelta
 
 
 _WEIGHT_RE = re.compile(
-    r"(?<![\\w.])(?P<marker>@|at\\s+|with\\s+)?(?P<sign>[+-]?)\\s*"
-    r"(?P<amount>\\d+(?:[.,]\\d+)?)\\s*"
-    r"(?P<unit>kg|kgs|kilograms?|lb|lbs|pounds?)\\b",
+    r"(?<![\w.])(?P<marker>@|at\s+|with\s+)?(?P<sign>[+-]?)\s*"
+    r"(?P<amount>\d+(?:[.,]\d+)?)\s*"
+    r"(?P<unit>kg|kgs|kilograms?|lb|lbs|pounds?)\b",
     re.IGNORECASE,
 )
 _AT_WEIGHT_RE = re.compile(
-    r"@\\s*(?P<amount>\\d+(?:[.,]\\d+)?)(?!\\s*(?:reps?|sets?))",
+    r"@\s*(?P<amount>\d+(?:[.,]\d+)?)(?!\s*(?:reps?|sets?))",
     re.IGNORECASE,
 )
-_DATE_RE = re.compile(r"\\b\\d{4}-\\d{2}-\\d{2}\\b")
+_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _COMPOSITE_PATTERNS = [
-    re.compile(r"(?<!\\w)(?P<sets>\\d{1,2})\\s*sets?\\s*(?:of\\s*)?(?P<reps>\\d{1,3})\\s*reps?\\b", re.IGNORECASE),
-    re.compile(r"(?<!\\w)(?P<sets>\\d{1,2})\\s*sets?\\s*,\\s*(?P<reps>\\d{1,3})\\s*reps?\\b", re.IGNORECASE),
-    re.compile(r"(?<!\\w)(?P<reps>\\d{1,3})\\s*reps?\\s*(?:for\\s*)?(?P<sets>\\d{1,2})\\s*sets?\\b", re.IGNORECASE),
-    re.compile(r"(?<!\\w)(?P<sets>\\d{1,2})\\s*[x×]\\s*(?P<reps>\\d{1,3})(?:\\s*reps?)?(?!\\d)", re.IGNORECASE),
-    re.compile(r"(?<!\\w)set\\s*\\d+\\s*[:=-]\\s*(?P<reps>\\d{1,3})\\s*reps?\\b", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*(?:of\s*)?(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*sets?\s*,\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\s*(?:for\s*)?(?P<sets>\d{1,2})\s*sets?\b", re.IGNORECASE),
+    re.compile(r"(?<!\w)(?P<sets>\d{1,2})\s*[x×]\s*(?P<reps>\d{1,3})(?:\s*reps?)?(?!\d)", re.IGNORECASE),
+    re.compile(r"(?<!\w)set\s*\d+\s*[:=-]\s*(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE),
 ]
-_SINGLE_REPS_RE = re.compile(r"(?<!\\w)(?P<reps>\\d{1,3})\\s*reps?\\b", re.IGNORECASE)
+_SINGLE_REPS_RE = re.compile(r"(?<!\w)(?P<reps>\d{1,3})\s*reps?\b", re.IGNORECASE)
 _NOISE_RE = re.compile(
-    r"\\b(?:i|did|do|today|yesterday|then|and|after|that|for|of|at|with|"
+    r"\b(?:i|did|do|today|yesterday|then|and|after|that|for|of|at|with|"
     r"set|sets|rep|reps|each|my|workout|session|please|log|weight|"
-    r"kg|kgs|kilogram|kilograms|lb|lbs|pound|pounds|bodyweight|body-weight)\\b",
+    r"kg|kgs|kilogram|kilograms|lb|lbs|pound|pounds|bodyweight|body-weight)\b",
     re.IGNORECASE,
 )
 
 
 def _split_segments(text):
-    text = text.replace("\\r", "\\n")
-    text = re.sub(r"(?i)\\b(?:and\\s+then|then|after\\s+that)\\b", ";", text)
-    text = re.sub(r"\\n+|;", ";", text)
+    text = text.replace("\r", "\n")
+    text = re.sub(r"(?i)\b(?:and\s+then|then|after\s+that)\b", ";", text)
+    text = re.sub(r"\n+|;", ";", text)
     # A comma before another exercise clause is a common way to list sessions.
     text = re.sub(
-        r",\\s*(?=[A-Za-z][^,;]{0,100}\\b(?:\\d{1,2}\\s*[x×]|\\d{1,2}\\s+sets?\\b))",
+        r",\s*(?=[A-Za-z][^,;]{0,100}\b(?:\d{1,2}\s*[x×]|\d{1,2}\s+sets?\b))",
         ";",
         text,
         flags=re.IGNORECASE,
     )
     text = re.sub(
-        r"\\s+and\\s+(?=[A-Za-z][^;]{0,100}\\b(?:\\d{1,2}\\s*[x×]|\\d{1,2}\\s+sets?\\b))",
+        r"\s+and\s+(?=[A-Za-z][^;]{0,100}\b(?:\d{1,2}\s*[x×]|\d{1,2}\s+sets?\b))",
         ";",
         text,
         flags=re.IGNORECASE,
@@ -108,12 +108,12 @@ def _exercise_name(segment, prescriptions, weights):
             chars[index] = " "
     name = "".join(chars)
     name = _DATE_RE.sub(" ", name)
-    name = re.sub(r"\\b(?:date|on)\\b", " ", name, flags=re.IGNORECASE)
+    name = re.sub(r"\b(?:date|on)\b", " ", name, flags=re.IGNORECASE)
     name = _NOISE_RE.sub(" ", name)
-    name = re.sub(r"\\b\\d+(?:[.,]\\d+)?\\b|[@+×x]", " ", name, flags=re.IGNORECASE)
+    name = re.sub(r"\b\d+(?:[.,]\d+)?\b|[@+×x]", " ", name, flags=re.IGNORECASE)
     name = re.sub(r"[^A-Za-zÀ-ÖØ-öø-ÿ0-9' -]", " ", name)
-    name = re.sub(r"\\s+", " ", name).strip(" -'")
-    name = re.sub(r"^(?:i did|did|do|today)\\s+", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+", " ", name).strip(" -'")
+    name = re.sub(r"^(?:i did|did|do|today)\s+", "", name, flags=re.IGNORECASE)
     return name[:80].strip()
 
 
@@ -133,7 +133,7 @@ def parse_workout_note(note):
         except ValueError:
             return {"clarification": "That date is invalid. Use YYYY-MM-DD."}
         text = text[:date_match.start()] + " " + text[date_match.end():]
-    elif re.search(r"\\byesterday\\b", text, re.IGNORECASE):
+    elif re.search(r"\byesterday\b", text, re.IGNORECASE):
         workout_date -= timedelta(days=1)
 
     parsed = []
@@ -146,7 +146,7 @@ def parse_workout_note(note):
         if any(not 1 <= item["sets"] <= 99 or not 1 <= item["reps"] <= 999 for item in prescriptions):
             unknown.append(segment)
             continue
-        if any(re.match(r"\\s*[-–]\\s*\\d", segment[item["end"]:]) for item in prescriptions):
+        if any(re.match(r"\s*[-–]\s*\d", segment[item["end"]:]) for item in prescriptions):
             unknown.append(segment)
             continue
 
