@@ -521,12 +521,12 @@ CONNECTION_PAGE = """
 {% for message in get_flashed_messages() %}<p class="flash">{{ message }}</p>{% endfor %}
 <section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Set up your iPhone Shortcut and personal TimGym key.</p></section>
 {% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new TimGym key</h2></div><p class="muted">Copy it now; it is shown only once. Anyone with this key can add workouts to your account.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
-<section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>On-device workout logging</h2></div></div>
-<p class="muted">The TimGym Upload Shortcut uses your iPhone’s on-device model to structure the workout. Review it in Shortcuts, then choose Save to send the workout to TimGym.</p>
-<p class="panel-kicker"><a href="https://github.com/timoteicioaba/TimGym/blob/main/SHORTCUT.md" target="_blank" rel="noopener">Open the iPhone Shortcut setup guide</a></p>
+<section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Local workout model</h2></div></div>
+<p class="muted">TimGym uses Qwen 3.5 2B through Ollama on this server. The workout note is interpreted on your CasaOS machine; it is saved only after you review and confirm it. No ChatGPT or OpenAI API is used for this flow.</p>
+<p class="panel-kicker">Model: qwen3.5:2b · CPU inference · first setup downloads about 3 GB</p>
 </section>
-<section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Personal API key</h2></div></div>
-<p class="muted">The Shortcut uses this key to save workouts to your account. Keep it private. Rotating it will invalidate the previous key.</p>
+<section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Optional ChatGPT connection</h2></div></div>
+<p class="muted">This personal key is only needed for a custom GPT Action or a separate iPhone Shortcut. The local server model does not use it. Keep it private; rotating it invalidates the previous key.</p>
 <form method="post" action="{{ url_for('create_api_key') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">Generate or rotate my key</button></form>
 <p class="panel-kicker" style="margin:12px 0 0"><a href="{{ url_for('openapi_spec') }}">API specification</a></p>
 </section>
@@ -859,7 +859,7 @@ def interpret_workout():
     except HTTPError as exc:
         return {"error": "The local model could not process that workout. Try again shortly."}, 502
     except (URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
-        return {"error": "The local workout model is unavailable or returned an invalid result. Try again shortly."}, 503
+        return {"error": "The local model is starting or unavailable. Wait a little and try again."}, 503
 
 
 @app.post("/workouts/save")
