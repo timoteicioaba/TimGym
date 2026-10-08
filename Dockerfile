@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && mkdir -p /data \
     && chown appuser:appuser /data
 
-COPY app.py .
+COPY app.py workout_parser.py .
 USER appuser
 EXPOSE 8000
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "360", "--access-logfile", "-", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "app:app"]
