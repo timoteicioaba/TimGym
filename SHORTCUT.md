@@ -51,4 +51,4 @@ Replace `YOUR_PERSONAL_TIMGYM_KEY` with the key shown by TimGym. Keep this short
 2. Provide workout text as the shortcut input, such as by selecting text and sharing it to the shortcut.
 3. Check the structured workout and choose **Save to TimGym**.
 
-If the shortcut isn't installed yet, the first tap may only show that the shortcut can't be found. Create it with the exact name above, then return to TimGym and tap again.
+To use this optional route, run the shortcut from the iOS share sheet with workout text selected as input. It operates separately from the dashboard’s server-side model.
