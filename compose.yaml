@@ -1,0 +1,15 @@
+services:
+  timgym:
+    build: .
+    container_name: timgym
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - gym_data:/data
+    environment:
+      DATABASE_PATH: /data/timgym.db
+      SECRET_KEY: ${SECRET_KEY:-change-this-local-secret}
+
+volumes:
+  gym_data:
