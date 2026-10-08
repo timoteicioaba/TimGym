@@ -789,22 +789,21 @@ def interpret_workout():
     parsed = parse_workout_note(note)
     if "clarification" in parsed:
         return {"clarification": parsed["clarification"]}
-    try:
-        workout_date, exercises = normalize_workout_payload(parsed["workout"])
-        clean_exercises = [
-            {
-                "name": exercise["name"],
-                "notes": exercise["notes"],
-                "sets": [
-                    {"reps": one["reps"], "weight_kg": one["weight_kg"]}
-                    for one in exercise["sets"]
-                ],
-            }
-            for exercise in exercises
-        ]
-        return {"workout": {"date": workout_date, "exercises": clean_exercises}}
-    except (ValueError, TypeError) as exc:
-        return {"clarification": str(exc)}
+    draft = parsed["workout"]
+    return {
+        "workout": {
+            "date": draft["date"],
+            "exercises": [
+                {
+                    "name": exercise["name"],
+                    "notes": exercise["notes"],
+                    "sets": exercise["sets"],
+                    "missing_fields": exercise["missing_fields"],
+                }
+                for exercise in draft["exercises"]
+            ],
+        }
+    }
 
 
 @app.post("/workouts/save")
