@@ -20,14 +20,14 @@
   <h3 style="font-size:.9rem;margin:14px 0 4px">Recent imports</h3>
   {% for item in imports %}
   <div class="kv" style="display:block">
-    <div style="display:flex;justify-content:space-between;gap:10px"><span>{{ item.received_at[:16] }} UTC</span>
+    <div style="display:flex;justify-content:space-between;gap:10px"><span>{{ item.received_at[:16] }} UTC{% if item.source and item.source.startswith("file ") %} · <span title="{{ item.source[5:] }}">file</span>{% endif %}</span>
       <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}{% if item.measurements_saved %} · {{ item.measurements_saved }} check-in{{ "" if item.measurements_saved == 1 else "s" }}{% endif %}{% if item.nights_saved %} · {{ item.nights_saved }} night{{ "" if item.nights_saved == 1 else "s" }}{% endif %}</span></div>
     {% if item.workouts_received == 0 and not item.metrics_received %}<p class="muted" style="margin:4px 0 0">This export was empty. Check the automation's date range and selected data.</p>{% endif %}
     <div class="import-groups">
       {% if item.workouts_received %}<span class="chip-small on">Workouts {{ item.workouts_received }}</span>{% endif %}
       {% for label in ["Activity", "Nutrition", "Sleep", "Body"] %}<span class="chip-small{% if label in item.groups %} on{% endif %}">{{ label }}{% if label not in item.groups %} ✕{% endif %}</span>{% endfor %}
     </div>
-    {% if item.metrics_unused %}<p class="muted" style="margin:4px 0 0">Received but not used: {{ item.metrics_unused|join(", ") }}</p>{% endif %}
+    {% if item.metrics_unused %}<details class="unused-metrics"><summary>{{ item.metrics_unused|length }} other metric{{ "" if item.metrics_unused|length == 1 else "s" }} received but not used</summary><p>{{ item.metrics_unused|join(", ") }}</p></details>{% endif %}
     {% if item.skipped_reasons %}<p class="muted" style="margin:4px 0 0;color:var(--warn)">Skipped {{ item.skipped }}: {{ item.skipped_reasons|join("; ") }}</p>{% endif %}
   </div>
   {% endfor %}
@@ -49,6 +49,16 @@
     <p class="muted">If the app only says “error”, run <code>docker compose logs --tail=20 timgym</code> on the server. TimGym logs why it refused each import.</p>
     <p class="muted">Re-sending the same days is safe: workouts are matched by their Health ID and daily totals are replaced, never doubled.</p>
   </details>
+</section>
+
+<h2 class="section-title" id="import">Import a file</h2>
+<section class="card">
+  <p class="muted" style="margin-top:0">For a bulk import, such as your full history: in Health Auto Export, use <strong>Manual Export</strong> with format <strong>JSON</strong>, aggregation <strong>Days</strong>, and the date range you want, then pick the file here. Importing data that is already in TimGym updates it without duplicates. Up to 100 MB per file.</p>
+  <form method="post" action="{{ url_for('import_health_file') }}" enctype="multipart/form-data" class="import-form">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <input type="file" name="export" accept=".json,application/json" required aria-label="Health Auto Export JSON file">
+    <button class="full-button" type="submit">Import</button>
+  </form>
 </section>
 
 <h2 class="section-title">API key</h2>

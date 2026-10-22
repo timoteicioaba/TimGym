@@ -86,6 +86,8 @@ Websites can't read Apple Health directly, so an iPhone app sends the data to Ti
    The **Workouts** automation sends your Apple Health workouts. The **Health metrics** automation sends **Active Energy**, **Step Count**, **Weight**, **Body Fat Percentage**, **Waist Circumference**, and for nutrition **Dietary Energy**, **Protein**, **Carbohydrates**, and **Total Fat**. Food apps such as MyFitnessPal, Lose It!, or Cronometer write those to Apple Health. If a metric arrives under a name TimGym does not recognize, **Settings → Recent imports** lists it as “received but not used”.
 3. Run it once manually with a short range, such as the last 7 days. **Settings → Apple Health** shows how many workouts and days arrived. Uploads are limited to 50 MB, so sync long histories in parts.
 
+To import a large history in one go, use **Manual Export** in Health Auto Export (JSON, aggregation **Days**, any date range), then upload the file in **Settings → Import a file** (up to 100 MB per file). Data already in TimGym is updated, not duplicated.
+
 If Health Auto Export only reports “error”, run `docker compose logs --tail=20 timgym`. Every refused import is logged with its reason (for example an unknown API key, a body that is not JSON, or an upload over the limit). The JSON response also carries the reason in `error`.
 
 **Settings → Apple Health → Recent imports** shows what each sync contained and why any entry was skipped.

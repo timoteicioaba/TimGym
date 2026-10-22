@@ -250,3 +250,9 @@ input.needs-value{border-color:var(--warn);background:#1a1609}
 .sleep-col small{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:.6rem}
 .sleep-goal{position:absolute;left:0;right:0;border-top:1px dashed #3a4540;pointer-events:none}
 .sleep-goal small{position:absolute;right:0;top:-14px;color:var(--muted);font-size:.6rem}
+.import-form{display:flex;flex-direction:column;gap:10px}
+.import-form input[type=file]{min-height:auto;padding:12px;color:var(--muted);font-size:.85rem}
+.import-form input[type=file]::file-selector-button{margin-right:10px;padding:7px 12px;border:1px solid #344239;border-radius:10px;background:#202b24;color:var(--text);font:600 .84rem -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.unused-metrics{margin-top:4px;color:var(--muted);font-size:.78rem}
+.unused-metrics summary{cursor:pointer}
+.unused-metrics p{margin:4px 0 0;overflow-wrap:anywhere}

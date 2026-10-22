@@ -919,6 +919,39 @@ def render_settings(new_api_key=None):
     )
 
 
+MANUAL_IMPORT_LIMIT = 100 * 1024 * 1024
+
+
+@app.post("/settings/import")
+@login_required
+def import_health_file():
+    # A full-history export is bigger than an automatic sync, so allow more here.
+    request.max_content_length = MANUAL_IMPORT_LIMIT
+    if not valid_csrf():
+        abort(400)
+    upload = request.files.get("export")
+    if upload is None or not upload.filename:
+        flash("Choose a Health Auto Export JSON file to import.")
+        return redirect(url_for("settings"))
+    try:
+        payload = json.load(upload.stream)
+    except (ValueError, UnicodeDecodeError):
+        flash("That file is not valid JSON. In Health Auto Export, export with the JSON format.")
+        return redirect(url_for("settings"))
+    try:
+        imported = normalize_health_payload(payload)
+    except ValueError as exc:
+        flash(f"Could not import that file: {exc}")
+        return redirect(url_for("settings"))
+    summary = store_health_import(get_db(), g.user["id"], imported, source=f"file {upload.filename[:60]}")
+    parts = [
+        f'{summary["workouts_saved"]} workouts', f'{summary["days_saved"]} days of activity and nutrition',
+        f'{summary["nights_saved"]} nights of sleep', f'{summary["measurements_saved"]} body check-ins',
+    ]
+    flash("Imported " + ", ".join(parts) + (f' ({summary["skipped"]} entries skipped).' if summary["skipped"] else "."))
+    return redirect(url_for("settings"))
+
+
 @app.get("/settings")
 @login_required
 def settings():
@@ -1165,20 +1198,9 @@ def save_health_measurements(db, user_id, body):
     return saved
 
 
-@app.post("/api/health")
-@api_key_required
-def api_import_health():
-    try:
-        # Some exporters omit the JSON content type, so parse the body regardless.
-        payload = request.get_json(force=True, silent=True)
-        if payload is None:
-            raise ValueError("The body is not valid JSON. Choose the JSON export format.")
-        imported = normalize_health_payload(payload)
-    except ValueError as exc:
-        api_log_failure(400, str(exc))
-        return {"error": str(exc)}, 400
-    user_id = g.api_user["id"]
-    db = get_db()
+def store_health_import(db, user_id, imported, source):
+    """Save normalized Apple Health data (from the sync API or a file upload) and
+    record a summary for Settings. Re-imports update rows in place."""
     db.executemany(
         """INSERT INTO health_workouts
            (user_id, external_id, workout_date, started_at, activity, duration_s, active_kcal, distance_km)
@@ -1206,6 +1228,7 @@ def api_import_health():
         [dict(night, user_id=user_id) for night in imported["sleep"].values()],
     )
     summary = {
+        "source": source,
         "workouts_received": imported["received"]["workouts"],
         "measurements_saved": body_saved,
         "nights_saved": len(imported["sleep"]),
@@ -1228,11 +1251,31 @@ def api_import_health():
     return summary
 
 
+
+
+@app.post("/api/health")
+@api_key_required
+def api_import_health():
+    try:
+        # Some exporters omit the JSON content type, so parse the body regardless.
+        payload = request.get_json(force=True, silent=True)
+        if payload is None:
+            raise ValueError("The body is not valid JSON. Choose the JSON export format.")
+        imported = normalize_health_payload(payload)
+    except ValueError as exc:
+        api_log_failure(400, str(exc))
+        return {"error": str(exc)}, 400
+    return store_health_import(get_db(), g.api_user["id"], imported, source="sync")
+
+
 @app.errorhandler(413)
 def payload_too_large(_error):
     if request.path.startswith("/api/"):
         api_log_failure(413, "body larger than the upload limit")
         return {"error": "This export is too large (over 50 MB). Export a shorter date range, then sync the rest in parts."}, 413
+    if request.path == "/settings/import":
+        flash("That file is over 100 MB. Export a shorter date range and import it in parts.")
+        return redirect(url_for("settings"))
     return "Upload too large.", 413
 
 
