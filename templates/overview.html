@@ -22,8 +22,11 @@
   <div class="stat"><span class="stat-label">Active energy</span>
     {% if has_health %}<span class="stat-value">{{ "{:,.0f}".format(week_kcal) }}<span class="stat-unit"> kcal</span></span><span class="stat-note">This week{% if steps_today %} · {{ "{:,.0f}".format(steps_today) }} steps today{% endif %}</span>
     {% else %}<span class="stat-value">—</span><a class="stat-note" href="{{ url_for('settings') }}#apple-health">Connect Apple Health</a>{% endif %}</div>
-  <div class="stat"><span class="stat-label">Volume</span>
-    <span class="stat-value">{{ "{:,.0f}".format(week_volume) }}<span class="stat-unit"> kg</span></span><span class="stat-note">{{ week_sets }} sets this week</span></div>
+  <div class="stat"><span class="stat-label">Training time</span>
+    {% if week_minutes %}<span class="stat-value">{% if week_minutes >= 60 %}{{ week_minutes // 60 }}<span class="stat-unit"> h </span>{{ "%02d"|format(week_minutes % 60) }}{% else %}{{ week_minutes }}{% endif %}<span class="stat-unit"> min</span></span>
+    <span class="stat-note">{{ week_health_count }} workout{{ "" if week_health_count == 1 else "s" }}{% if week_volume %} · {{ "{:,.0f}".format(week_volume) }} kg lifted{% endif %}</span>
+    {% elif week_volume %}<span class="stat-value">{{ "{:,.0f}".format(week_volume) }}<span class="stat-unit"> kg</span></span><span class="stat-note">Volume · {{ week_sets }} sets this week</span>
+    {% else %}<span class="stat-value">—</span><span class="stat-note">No workouts yet this week</span>{% endif %}</div>
   <div class="stat"><span class="stat-label">Body weight</span>
     <span class="stat-value">{% if latest_weight is not none %}{{ "%.1f"|format(latest_weight) }}<span class="stat-unit"> kg</span>{% else %}—{% endif %}</span>
     <span class="stat-note">{% if weight_change is not none %}{% if weight_change > 0 %}+{% endif %}{{ "%.1f"|format(weight_change) }} kg since last{% else %}<a href="{{ url_for('log_page') }}#check-in">Add a check-in</a>{% endif %}</span></div>

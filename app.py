@@ -116,6 +116,12 @@ CREATE TABLE IF NOT EXISTS health_daily (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, day, metric)
 );
+CREATE TABLE IF NOT EXISTS health_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    summary_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS api_tokens (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL UNIQUE,
@@ -478,8 +484,10 @@ def index():
     timeline = gym_sessions(db, user_id, limit=6) + health_workouts(db, user_id, limit=6)
     timeline.sort(key=lambda entry: (entry["date"], entry.get("started_at") or ""), reverse=True)
     latest_weight, weight_change = body_weight_summary(db, user_id)
+    week_minutes = round(sum(entry["duration_s"] or 0 for entry in week_health) / 60)
     return render_template(
         "overview.html", tab="home", today=today, week=week,
+        week_minutes=week_minutes, week_health_count=len(week_health),
         week_days=len(gym_days | health_days), week_sets=sum(entry["sets"] for entry in week_gym),
         week_volume=sum(entry["volume"] for entry in week_gym), week_kcal=week_kcal,
         has_health=bool(daily_rows or health_week_kcal) or has_health_data(db, user_id),
@@ -640,9 +648,13 @@ def render_settings(new_api_key=None):
         {"u": user_id},
     ).fetchone()
     has_key = db.execute("SELECT 1 FROM api_tokens WHERE user_id = ?", (user_id,)).fetchone() is not None
+    imports = [
+        dict(json.loads(row["summary_json"]), received_at=row["received_at"])
+        for row in db.execute("SELECT received_at, summary_json FROM health_imports WHERE user_id = ? ORDER BY id DESC LIMIT 5", (user_id,))
+    ]
     return render_template(
         "settings.html", tab="settings", new_api_key=new_api_key, has_key=has_key,
-        health_url=url_for("api_import_health", _external=True), sync=sync,
+        health_url=url_for("api_import_health", _external=True), sync=sync, imports=imports,
     )
 
 
@@ -888,12 +900,24 @@ def api_import_health():
            ON CONFLICT (user_id, day, metric) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP""",
         [(user_id, day, metric, value) for (day, metric), value in imported["daily"].items()],
     )
-    db.commit()
-    return {
+    summary = {
+        "workouts_received": imported["received"]["workouts"],
         "workouts_saved": len(imported["workouts"]),
         "days_saved": len({day for day, _metric in imported["daily"]}),
+        "metrics_received": imported["received"]["metrics"],
         "skipped": imported["skipped"],
+        "skipped_reasons": imported["skipped_reasons"],
     }
+    # Keep a short history so Settings can show what the last syncs contained.
+    db.execute("INSERT INTO health_imports (user_id, summary_json) VALUES (?, ?)", (user_id, json.dumps(summary)))
+    db.execute(
+        "DELETE FROM health_imports WHERE user_id = ? AND id NOT IN (SELECT id FROM health_imports WHERE user_id = ? ORDER BY id DESC LIMIT 20)",
+        (user_id, user_id),
+    )
+    db.commit()
+    if imported["skipped_reasons"]:
+        app.logger.warning("Apple Health import for user %s skipped %s entries: %s", user_id, imported["skipped"], "; ".join(imported["skipped_reasons"]))
+    return summary
 
 
 @app.errorhandler(413)

@@ -43,6 +43,15 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(db.execute("SELECT COUNT(*) FROM health_workouts").fetchone()[0], 1)
         db.close()
 
+    def test_import_summary_is_kept_for_settings(self):
+        response = self.post({"data": {"workouts": [{"name": "Elliptical", "start": "yesterday"}], "metrics": []}})
+        self.assertEqual(response.json["workouts_received"], 1)
+        self.assertEqual(response.json["skipped_reasons"], ["Elliptical: unreadable start time 'yesterday'"])
+        with self.client.session_transaction() as session:
+            session["user_id"] = 1
+        page = self.client.get("/settings").get_data(as_text=True)
+        self.assertIn("unreadable start time", page)
+
     def test_json_without_content_type(self):
         self.assertEqual(self.post(EXPORT, headers={"Content-Type": None}).status_code, 200)
         self.assertEqual(self.post(EXPORT, headers={"Content-Type": "text/plain"}).status_code, 200)

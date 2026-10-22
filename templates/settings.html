@@ -16,6 +16,17 @@
   <div class="kv"><span>Workouts imported</span><span>{{ sync.workouts }}</span></div>
   <div class="kv"><span>Days with daily totals</span><span>{{ sync.days }}</span></div>
   <div class="kv"><span>Last import</span><span>{{ sync.last_sync[:16] ~ " UTC" if sync.last_sync else "Never" }}</span></div>
+  {% if imports %}
+  <h3 style="font-size:.9rem;margin:14px 0 4px">Recent imports</h3>
+  {% for item in imports %}
+  <div class="kv" style="display:block">
+    <div style="display:flex;justify-content:space-between;gap:10px"><span>{{ item.received_at[:16] }} UTC</span>
+      <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}</span></div>
+    {% if item.workouts_received == 0 %}<p class="muted" style="margin:4px 0 0">No workouts were included in this export. In Health Auto Export, make sure workouts are part of an automation; they may need their own automation with the Workouts data type.</p>{% endif %}
+    {% if item.skipped_reasons %}<p class="muted" style="margin:4px 0 0;color:var(--warn)">Skipped {{ item.skipped }}: {{ item.skipped_reasons|join("; ") }}</p>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
   <details style="margin-top:12px">
     <summary class="muted" style="cursor:pointer;font-weight:650;color:var(--accent)">Set up automatic sync</summary>
     <p class="muted">Websites can’t read Apple Health directly, so an iPhone app sends it to TimGym. <strong>Health Auto Export</strong> (App Store) does this on a schedule; its automations need the app’s premium tier.</p>
@@ -25,7 +36,7 @@
       <li>URL: <code>{{ health_url }}</code></li>
       <li>Add a header <code>Authorization</code> with the value <code>Bearer YOUR_KEY</code>.</li>
       <li>Format <strong>JSON</strong>, export version <strong>2</strong>, aggregation <strong>Days</strong>.</li>
-      <li>Include <strong>Workouts</strong>, plus the metrics <strong>Active Energy</strong> and <strong>Step Count</strong>.</li>
+      <li>Include the metrics <strong>Active Energy</strong> and <strong>Step Count</strong>. Workouts (strength training, elliptical, runs…) may need a <strong>second automation</strong> with the <strong>Workouts</strong> data type, using the same URL and header.</li>
       <li>For the first manual export, pick a short range such as the last 7 days. Very long ranges can exceed the 50 MB upload limit.</li>
       <li>Pick a sync interval. The counts above update when TimGym receives data.</li>
     </ol>

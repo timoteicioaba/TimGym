@@ -105,3 +105,27 @@ class SimpleFormatTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TimestampTests(unittest.TestCase):
+    def workout_date(self, start):
+        result = normalize_health_payload({"workouts": [{"name": "Elliptical", "start": start}]})
+        return result["workouts"][0]["workout_date"] if result["workouts"] else result["skipped_reasons"]
+
+    def test_twelve_hour_clock(self):
+        # iPhones set to a 12-hour clock export AM/PM, often with a narrow no-break space.
+        self.assertEqual(self.workout_date("2026-10-21 6:05:12 PM +0300"), "2026-10-21")
+        self.assertEqual(self.workout_date("2026-10-21 6:05:12 PM +0300"), "2026-10-21")
+        self.assertEqual(self.workout_date("2026-10-21 12:30:00 AM +0300"), "2026-10-21")
+
+    def test_other_forms(self):
+        self.assertEqual(self.workout_date("2026-10-21T18:05:12Z"), "2026-10-21")
+        self.assertEqual(self.workout_date("2026-10-21 18:05 +03:00"), "2026-10-21")
+        self.assertEqual(self.workout_date("2026-10-21 18:05:12"), "2026-10-21")
+
+    def test_unreadable_start_is_explained(self):
+        self.assertEqual(self.workout_date("21/10/2026 18:05"), ["Elliptical: unreadable start time '21/10/2026 18:05'"])
+
+    def test_received_counts(self):
+        result = normalize_health_payload(AUTO_EXPORT)
+        self.assertEqual(result["received"], {"workouts": 3, "metrics": ["active_energy", "step_count", "heart_rate"]})

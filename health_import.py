@@ -10,6 +10,7 @@ Two payload shapes are accepted:
 
 Entries that cannot be read are skipped and counted, not guessed.
 """
+import re
 from datetime import date, datetime
 
 _KJ_PER_KCAL = 4.184
@@ -62,27 +63,56 @@ def _km(value):
     return round(amount, 3) if 0 <= amount <= 1000 else None
 
 
+_LOOSE_TIMESTAMP_RE = re.compile(
+    r"(?P<date>\d{4}-\d{2}-\d{2})[ T]+(?P<hour>\d{1,2}):(?P<minute>\d{2})(?::(?P<second>\d{2})(?:\.\d+)?)?"
+    r"\s*(?P<ampm>[AaPp]\.?[Mm]\.?)?\s*(?P<offset>Z|[+-]\d{2}:?\d{2})?"
+)
+
+
 def _timestamp(value):
-    """Parse "2026-10-21 18:05:12 +0300" (Health Auto Export) or ISO 8601."""
-    text = str(value or "").strip()
-    for parse in (
-        lambda t: datetime.strptime(t, "%Y-%m-%d %H:%M:%S %z"),
-        lambda t: datetime.fromisoformat(t.replace("Z", "+00:00")),
-    ):
-        try:
-            return parse(text)
-        except ValueError:
-            continue
-    return None
+    """Parse "2026-10-21 18:05:12 +0300" (Health Auto Export), ISO 8601, or the
+    12-hour form an iPhone set to AM/PM produces ("2026-10-21 6:05:12 PM +0300")."""
+    # iOS puts a narrow no-break space before AM/PM.
+    text = re.sub(r"[\u00a0\u202f]", " ", str(value or "")).strip()
+    try:
+        return datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
+    except ValueError:
+        pass
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    match = _LOOSE_TIMESTAMP_RE.match(text)
+    if not match:
+        return None
+    hour = int(match.group("hour"))
+    ampm = (match.group("ampm") or "").replace(".", "").upper()
+    if ampm:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if ampm == "PM" else 0)
+    offset = match.group("offset") or ""
+    if offset and offset != "Z" and ":" not in offset:
+        offset = offset[:3] + ":" + offset[3:]
+    try:
+        return datetime.fromisoformat(
+            f'{match.group("date")}T{hour:02d}:{match.group("minute")}:{match.group("second") or "00"}'
+            + ("+00:00" if offset == "Z" else offset)
+        )
+    except ValueError:
+        return None
 
 
 def _workout(item):
+    """Return (workout, None) or (None, reason it was skipped)."""
     if not isinstance(item, dict):
-        return None
-    started = _timestamp(item.get("start"))
+        return None, "a workout entry was not an object"
     name = str(item.get("name") or item.get("type") or "").strip()[:80]
-    if started is None or not name:
-        return None
+    started = _timestamp(item.get("start"))
+    if not name:
+        return None, "a workout had no name"
+    if started is None:
+        return None, f'{name}: unreadable start time {str(item.get("start"))[:40]!r}'
 
     duration = None
     if item.get("duration_min") is not None:
@@ -113,7 +143,7 @@ def _workout(item):
         "duration_s": int(round(duration)) if duration is not None else None,
         "active_kcal": energy,
         "distance_km": distance,
-    }
+    }, None
 
 
 def _day(value):
@@ -125,7 +155,8 @@ def _day(value):
 
 
 def normalize_health_payload(payload):
-    """Return {"workouts": [...], "daily": {(day, metric): value}, "skipped": n}."""
+    """Return {"workouts": [...], "daily": {(day, metric): value}, "skipped": n,
+    "skipped_reasons": [...], "received": {"workouts": n, "metrics": [names]}}."""
     if not isinstance(payload, dict):
         raise ValueError("Send a JSON object.")
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
@@ -139,11 +170,14 @@ def normalize_health_payload(payload):
         raise ValueError(f"Send at most {MAX_ENTRIES} entries at a time.")
 
     skipped = 0
+    reasons = []
     workouts = {}
     for item in raw_workouts:
-        workout = _workout(item)
+        workout, reason = _workout(item)
         if workout is None:
             skipped += 1
+            if reason not in reasons and len(reasons) < 5:
+                reasons.append(reason)
         else:
             workouts[workout["external_id"]] = workout
 
@@ -187,4 +221,7 @@ def normalize_health_payload(payload):
     for key, value in daily.items():
         limit = 20000 if key[1] == "active_kcal" else 500000
         daily[key] = round(min(value, limit), 1)
-    return {"workouts": list(workouts.values()), "daily": daily, "skipped": skipped}
+    return {
+        "workouts": list(workouts.values()), "daily": daily, "skipped": skipped, "skipped_reasons": reasons,
+        "received": {"workouts": len(raw_workouts), "metrics": [m.get("name") for m in raw_metrics if isinstance(m, dict)][:40]},
+    }
