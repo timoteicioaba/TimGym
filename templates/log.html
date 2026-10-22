@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Log · TimGym{% endblock %}
+{% block bar_lead %}<span class="eyebrow">New entry</span>{% endblock %}
+{% block heading %}Log{% endblock %}
+{% block content %}
+<section class="card" id="workout-log">
+  <label for="workout-note">YOUR WORKOUT</label>
+  <textarea id="workout-note" maxlength="4000" autocapitalize="sentences" enterkeyhint="enter" placeholder="Squat 100kg 5,5,4&#10;Bench 60x8, 70x6, 80x5 felt strong&#10;Pull ups 3x10"></textarea>
+  {% if known_exercises %}<div class="hint-chips" aria-label="Recent exercises">{% for name in known_exercises[:12] %}<button class="chip" type="button" data-insert="{{ name }}">{{ name }}</button>{% endfor %}</div>{% endif %}
+  <button class="full-button" id="interpret-workout" type="button" style="margin-top:12px">Parse workout</button>
+  <div class="workout-preview" id="workout-preview" hidden>
+    <div class="preview-head"><h3>Review before saving</h3><input id="workout-date" type="date" aria-label="Workout date"></div>
+    <div id="workout-preview-content"></div>
+    <button class="secondary small-button" id="add-exercise" type="button">+ Add exercise</button>
+    <button class="full-button" id="save-workout" type="button" style="margin-top:12px">Save workout</button>
+  </div>
+  <datalist id="known-exercises">{% for name in known_exercises %}<option value="{{ name }}">{% endfor %}</datalist>
+  <div class="model-progress" id="model-progress" hidden aria-hidden="true"><span></span></div>
+  <p class="muted" id="workout-ai-status" role="status" aria-live="polite" style="margin:10px 0 0">Write it like a note: “Bench 60x8, 70x6”, “Squat 3x5 @ 100”, “Deadlift 140 for 5”. One exercise per line.</p>
+</section>
+
+<details class="card" id="check-in">
+  <summary>Body check-in <span>Weight &amp; measurements</span></summary>
+  <form method="post" action="{{ url_for('add_measurement') }}" style="margin-top:16px">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div class="fields"><div><label for="measured_on">DATE</label><input id="measured_on" name="measured_on" type="date" value="{{ today }}" required></div>
+    <div><label for="weight">BODY WEIGHT · KG</label><input id="weight" name="weight_kg" type="number" inputmode="decimal" min="1" max="1000" step="0.1" placeholder="82.4" required></div></div>
+    <div class="fields"><div><label for="body_fat">BODY FAT · %</label><input id="body_fat" name="body_fat_pct" type="number" inputmode="decimal" min="0" max="100" step="0.1" placeholder="Optional"></div>
+    <div><label for="waist">WAIST · CM</label><input id="waist" name="waist_cm" type="number" inputmode="decimal" min="1" max="500" step="0.1" placeholder="Optional"></div>
+    <div><label for="chest">CHEST · CM</label><input id="chest" name="chest_cm" type="number" inputmode="decimal" min="1" max="500" step="0.1" placeholder="Optional"></div>
+    <div><label for="hips">HIPS · CM</label><input id="hips" name="hips_cm" type="number" inputmode="decimal" min="1" max="500" step="0.1" placeholder="Optional"></div></div>
+    <button class="full-button" type="submit">Save check-in</button>
+  </form>
+</details>
+<script>if (location.hash === "#check-in") document.getElementById("check-in").open = true;</script>
+{% endblock %}
+{% block scripts %}
+<script>
+const csrfToken = {{ csrf|tojson }};
+let pendingWorkout = null;
+const noteField = document.getElementById("workout-note");
+const status = document.getElementById("workout-ai-status");
+const progress = document.getElementById("model-progress");
+const preview = document.getElementById("workout-preview");
+const previewContent = document.getElementById("workout-preview-content");
+const dateInput = document.getElementById("workout-date");
+const interpretButton = document.getElementById("interpret-workout");
+const addExerciseButton = document.getElementById("add-exercise");
+const saveButton = document.getElementById("save-workout");
+const draftKey = "timgym-draft-" + {{ user.username|tojson }};
+try { if (!noteField.value) noteField.value = localStorage.getItem(draftKey) || ""; } catch (error) {}
+
+const blank = value => value === null || value === undefined || value === "";
+const validReps = value => Number.isInteger(value) && value >= 1 && value <= 999;
+const validWeight = value => blank(value) || (Number.isFinite(value) && value >= 0 && value <= 2000);
+const validRpe = value => blank(value) || (Number.isFinite(value) && value >= 1 && value <= 10);
+const validName = name => name.trim().length > 0 && name.trim().length <= 80;
+
+function readNumber(input) {
+  return input.value === "" ? null : Number(input.value);
+}
+
+function makeInput(attrs, value, onChange, isValid) {
+  const input = document.createElement("input");
+  Object.assign(input, attrs);
+  if (attrs["aria-label"]) input.setAttribute("aria-label", attrs["aria-label"]);
+  input.value = blank(value) ? "" : value;
+  const check = () => input.classList.toggle("needs-value", !isValid(input));
+  input.addEventListener("input", () => { onChange(input); check(); updateSaveAvailability(); });
+  check();
+  return input;
+}
+
+function makeButton(text, className, label, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.textContent = text;
+  if (label) button.setAttribute("aria-label", label);
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function workoutIsComplete() {
+  const exercises = pendingWorkout?.exercises || [];
+  return Boolean(dateInput.value) && exercises.length > 0 && exercises.every(exercise =>
+    validName(exercise.name) && exercise.sets.length > 0 && exercise.sets.length <= 99 &&
+    exercise.sets.every(set => validReps(set.reps) && validWeight(set.weight_kg) && validRpe(set.rpe))
+  );
+}
+
+function updateSaveAvailability() {
+  const complete = workoutIsComplete();
+  saveButton.disabled = !complete;
+  status.textContent = complete
+    ? "Check the details, then save when they look right."
+    : "Fill in the highlighted fields to enable saving.";
+}
+
+function renderSetRow(exercise, set, index, showRpe) {
+  const row = document.createElement("div");
+  row.className = "preview-set-row" + (showRpe ? " with-rpe" : "");
+  const label = document.createElement("span");
+  label.textContent = String(index + 1);
+  const where = exercise.name + " set " + (index + 1);
+  row.append(
+    label,
+    makeInput({type: "number", inputMode: "numeric", min: "1", max: "999", step: "1", placeholder: "Reps", "aria-label": where + " reps"},
+      set.reps, input => { set.reps = readNumber(input); }, input => validReps(readNumber(input))),
+    makeInput({type: "number", inputMode: "decimal", min: "0", max: "2000", step: "0.5", placeholder: "kg", "aria-label": where + " weight in kg (optional)"},
+      set.weight_kg, input => { set.weight_kg = readNumber(input); }, input => validWeight(readNumber(input)))
+  );
+  if (showRpe) {
+    row.append(makeInput({type: "number", inputMode: "decimal", min: "1", max: "10", step: "0.5", placeholder: "RPE", "aria-label": where + " RPE (optional)"},
+      set.rpe, input => { set.rpe = readNumber(input); }, input => validRpe(readNumber(input))));
+  }
+  row.append(makeButton("×", "icon-button", "Remove " + where, () => {
+    exercise.sets.splice(index, 1);
+    renderPreview();
+  }));
+  return row;
+}
+
+function renderExercise(exercise, exerciseIndex) {
+  const item = document.createElement("div");
+  item.className = "preview-exercise";
+  const head = document.createElement("div");
+  head.className = "exercise-head";
+  const nameInput = makeInput({type: "text", maxLength: 80, placeholder: "Exercise", "aria-label": "Exercise name"},
+    exercise.name, input => { exercise.name = input.value; }, input => validName(input.value));
+  nameInput.setAttribute("list", "known-exercises");
+  head.append(nameInput, makeButton("×", "icon-button", "Remove " + (exercise.name || "exercise"), () => {
+    pendingWorkout.exercises.splice(exerciseIndex, 1);
+    renderPreview();
+  }));
+  item.append(head);
+
+  const showRpe = exercise.sets.some(set => !blank(set.rpe));
+  const columns = document.createElement("div");
+  columns.className = "preview-set-row set-columns" + (showRpe ? " with-rpe" : "");
+  for (const text of ["Set", "Reps", "kg", ...(showRpe ? ["RPE"] : []), ""]) {
+    const cell = document.createElement("span");
+    cell.textContent = text;
+    columns.append(cell);
+  }
+  item.append(columns);
+  exercise.sets.forEach((set, index) => item.append(renderSetRow(exercise, set, index, showRpe)));
+
+  item.append(makeButton("+ Add set", "secondary small-button", "Add a set to " + (exercise.name || "this exercise"), () => {
+    const last = exercise.sets[exercise.sets.length - 1];
+    exercise.sets.push(last ? {...last} : {reps: null, weight_kg: exercise.default_weight_kg ?? null, rpe: null});
+    renderPreview();
+  }));
+  const notes = makeInput({type: "text", maxLength: 500, placeholder: "Notes (optional)", "aria-label": "Notes for " + (exercise.name || "exercise")},
+    exercise.notes, input => { exercise.notes = input.value; }, () => true);
+  notes.classList.add("notes-input");
+  item.append(notes);
+  return item;
+}
+
+function renderPreview() {
+  previewContent.replaceChildren(...pendingWorkout.exercises.map(renderExercise));
+  preview.hidden = false;
+  updateSaveAvailability();
+}
+
+async function interpretNote() {
+  const note = noteField.value.trim();
+  if (!note) {
+    status.textContent = "Write a workout first.";
+    return;
+  }
+  interpretButton.disabled = true;
+  saveButton.disabled = true;
+  progress.hidden = false;
+  status.textContent = "Parsing your workout…";
+  try {
+    const response = await fetch("{{ url_for('interpret_workout') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+      body: JSON.stringify({note: note})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not parse this workout.");
+    if (result.clarification) {
+      status.textContent = result.clarification;
+      return;
+    }
+    pendingWorkout = result.workout;
+    dateInput.value = pendingWorkout.date;
+    renderPreview();
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    progress.hidden = true;
+    interpretButton.disabled = false;
+  }
+}
+
+interpretButton.addEventListener("click", interpretNote);
+noteField.addEventListener("keydown", event => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) interpretNote();
+});
+noteField.addEventListener("input", function () {
+  try { localStorage.setItem(draftKey, noteField.value); } catch (error) {}
+  if (pendingWorkout) status.textContent = "Your note changed. Parse again to refresh the preview, or save the preview as it is.";
+});
+dateInput.addEventListener("input", updateSaveAvailability);
+addExerciseButton.addEventListener("click", () => {
+  pendingWorkout.exercises.push({name: "", notes: "", default_weight_kg: null, sets: [{reps: null, weight_kg: null, rpe: null}]});
+  renderPreview();
+  previewContent.lastElementChild.querySelector("input").focus();
+});
+
+saveButton.addEventListener("click", async function () {
+  if (!pendingWorkout || !workoutIsComplete()) return;
+  saveButton.disabled = true;
+  status.textContent = "Saving workout…";
+  const payload = {
+    date: dateInput.value,
+    exercises: pendingWorkout.exercises.map(exercise => ({
+      name: exercise.name.trim(),
+      notes: (exercise.notes || "").trim(),
+      sets: exercise.sets.map(set => ({reps: set.reps, weight_kg: blank(set.weight_kg) ? null : set.weight_kg, rpe: blank(set.rpe) ? null : set.rpe}))
+    }))
+  };
+  try {
+    const response = await fetch("{{ url_for('save_web_workout') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not save workout.");
+    status.textContent = "Workout saved.";
+    try { localStorage.removeItem(draftKey); } catch (error) {}
+    window.location.href = "{{ url_for('index') }}";
+  } catch (error) {
+    saveButton.disabled = false;
+    status.textContent = error.message;
+  }
+});
+
+document.querySelectorAll("[data-insert]").forEach(chip => chip.addEventListener("click", () => {
+  const text = noteField.value.replace(/\s+$/, "");
+  noteField.value = (text ? text + "\n" : "") + chip.dataset.insert + " ";
+  noteField.dispatchEvent(new Event("input"));
+  noteField.focus();
+  noteField.setSelectionRange(noteField.value.length, noteField.value.length);
+}));
+</script>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Progress · TimGym{% endblock %}
+{% block bar_lead %}<span class="eyebrow">Trends</span>{% endblock %}
+{% block heading %}Progress{% endblock %}
+{% block content %}
+<h2 class="section-title">Main lifts <span>Best working weight · kg</span></h2>
+{% for lift in lift_charts %}
+<section class="card">
+  <h3 style="font-size:1rem">{{ lift.name }}</h3>
+  <div class="range-legend"><span><i class="legend-dot range-1"></i>1–5 reps</span><span><i class="legend-dot range-2"></i>6–10 reps</span><span><i class="legend-dot range-3"></i>11+ reps</span></div>
+  {% if lift.has_data %}<svg class="chart" viewBox="0 0 700 190" role="img" aria-label="{{ lift.name }} working weight trend">
+    <line class="chart-grid" x1="48" y1="42" x2="680" y2="42"/><line class="chart-grid" x1="48" y1="98" x2="680" y2="98"/><line class="chart-grid" x1="48" y1="154" x2="680" y2="154"/>
+    <text x="2" y="46">{{ "%.1f"|format(lift.chart_max) }} kg</text><text x="2" y="158">{{ "%.1f"|format(lift.chart_min) }} kg</text>
+    {% for series in lift.series %}{% if series.points %}<polyline class="chart-line range-{{ series.key }}" points="{{ series.polyline }}"/>{% for point in series.points %}<circle class="chart-point range-{{ series.key }}" cx="{{ point.x }}" cy="{{ point.y }}" r="4"><title>{{ point.date }} · {{ series.label }} · {{ "%.1f"|format(point.weight) }} kg</title></circle>{% endfor %}{% endif %}{% endfor %}
+    <text x="48" y="183">{{ lift.first_date }}</text><text x="620" y="183">{{ lift.last_date }}</text>
+  </svg>{% else %}<p class="empty" style="margin:12px 0 0">No weighted {{ lift.name|lower }} sets logged yet.</p>{% endif %}
+</section>
+{% endfor %}
+
+<h2 class="section-title">Body weight <a href="{{ url_for('log_page') }}#check-in">Add check-in</a></h2>
+<section class="card">
+  {% if latest_weight is not none %}<p style="margin:0 0 10px"><strong style="font-size:1.5rem;letter-spacing:-.04em">{{ "%.1f"|format(latest_weight) }} kg</strong>
+    {% if weight_change is not none %}<span class="muted"> · {% if weight_change > 0 %}+{% endif %}{{ "%.1f"|format(weight_change) }} kg since last</span>{% endif %}</p>{% endif %}
+  {% if chart_points %}
+  <svg class="chart" viewBox="0 0 700 210" role="img" aria-label="Body weight trend chart">
+    <line class="chart-grid" x1="48" y1="50" x2="680" y2="50"/><line class="chart-grid" x1="48" y1="108" x2="680" y2="108"/><line class="chart-grid" x1="48" y1="166" x2="680" y2="166"/>
+    <text x="2" y="54">{{ chart_max }} kg</text><text x="2" y="170">{{ chart_min }} kg</text>
+    <polyline class="chart-line" points="{{ chart_polyline }}"/>
+    {% for point in chart_points %}<circle class="chart-point" cx="{{ point.x }}" cy="{{ point.y }}" r="4"><title>{{ point.date }} · {{ "%.1f"|format(point.weight) }} kg</title></circle>{% endfor %}
+    <text x="48" y="198">{{ chart_points[0].date }}</text><text x="620" y="198">{{ chart_points[-1].date }}</text>
+  </svg>
+  {% else %}<p class="empty" style="margin:0">Your trend appears after your first check-in.</p>{% endif %}
+</section>
+{% if measurements %}
+<div class="list">
+  {% for row in measurements %}
+  <div class="row">
+    <div class="row-main"><span class="row-title">{{ "%.1f"|format(row.weight_kg) }} kg{% if row.body_fat_pct is not none %} <span class="muted">· {{ "%.1f"|format(row.body_fat_pct) }}% fat</span>{% endif %}</span>
+      <span class="row-sub">{{ row.measured_on|relative_day }}{% for label, value in [('Waist',row.waist_cm),('Chest',row.chest_cm),('Hips',row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if activities %}
+<h2 class="section-title">Apple Health workouts</h2>
+<div class="list">
+  {% for entry in activities %}
+  <div class="row">
+    <span class="row-icon health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
+    <div class="row-main"><span class="row-title">{{ entry.activity }}</span>
+      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}</span></div>
+    {% if entry.active_kcal %}<div class="row-end"><strong>{{ entry.active_kcal|round|int }}</strong>kcal</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

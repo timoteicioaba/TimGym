@@ -49,9 +49,34 @@ Everything in the preview is editable before you save: the date, exercise names 
 
 Parsing runs in the TimGym app itself. Workout notes are not sent to an AI service, no model is downloaded, and there is no extra API cost.
 
-Run the parser tests with `python -m unittest discover -s tests`.
+Run the tests with `python -m unittest discover -s tests`.
 
 The iPhone Shortcut in [SHORTCUT.md](SHORTCUT.md) remains an optional alternative. Each person using it needs their own private API key.
+
+## Use it like an app
+
+TimGym is installable as a home-screen app. On iPhone, open the site in Safari, tap **Share → Add to Home Screen**, and sign in once inside the installed app. The app has four tabs:
+
+- **Today** shows your week at a glance, this week's training days, volume, and active energy, then your recent sessions and recent exercises with your latest set, best set, and change since the previous session. Tap an exercise for its full history.
+- **Log** is where you type workouts. Tap the chips with your recent exercise names to start a line, and add body check-ins.
+- **Progress** has the main-lift charts, body weight, and imported Apple Health workouts.
+- **Settings** has Apple Health sync, your API key, and sign-out.
+
+Set `TIMEZONE` (for example `TIMEZONE=Europe/Bucharest` in your environment or `compose.yaml`) so “today” and the week view follow your local day instead of UTC.
+
+## Sync Apple Health
+
+Websites can't read Apple Health directly, so an iPhone app sends the data to TimGym. The tested route is [Health Auto Export](https://apps.apple.com/app/id1115567069). Its automations need the app's premium tier.
+
+1. In TimGym, open **Settings** and generate your API key.
+2. In Health Auto Export, create an **Automation** of type **REST API** with:
+   - URL: `https://gym.tim0tei.fun/api/health`
+   - Header: `Authorization: Bearer YOUR_TIMGYM_KEY`
+   - Format **JSON**, export version **2**, aggregation **Days**
+   - **Workouts**, plus the metrics **Active Energy** and **Step Count**
+3. Run it once manually. **Settings → Apple Health** shows how many workouts and days arrived.
+
+Workouts are matched by their Apple Health ID and daily totals replace earlier values, so syncing the same days again never double-counts. Energy in kJ and distances in miles are converted. The endpoint also accepts a simpler JSON shape (see `/openapi.yaml`) for your own Shortcut or script.
 
 ## Optional: connect a custom GPT Action
 

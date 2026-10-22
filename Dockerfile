@@ -11,7 +11,9 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && mkdir -p /data \
     && chown appuser:appuser /data
 
-COPY app.py workout_parser.py .
+COPY app.py workout_parser.py health_import.py openapi.yaml ./
+COPY templates ./templates
+COPY static ./static
 USER appuser
 EXPOSE 8000
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "app:app"]

@@ -10,6 +10,8 @@ services:
     environment:
       DATABASE_PATH: /data/timgym.db
       SECRET_KEY: ${SECRET_KEY:-change-this-local-secret}
+      # Your local time zone, so "today" and the week view match your day.
+      TIMEZONE: ${TIMEZONE:-UTC}
 
 volumes:
   gym_data:

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Sign in · TimGym{% endblock %}
+{% block body %}
+<main class="login-shell">
+  <div class="login-brand">
+    <img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="">
+    <div><h1 class="app-title">TimGym</h1><p class="muted" style="margin:6px 0 0">Your private training log</p></div>
+  </div>
+  {% for message in get_flashed_messages() %}<p class="flash" role="status">{{ message }}</p>{% endfor %}
+  <form class="card" method="post" action="{{ url_for('login') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div style="margin-bottom:12px"><label for="username">USERNAME</label><input id="username" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" required></div>
+    <div style="margin-bottom:16px"><label for="password">PASSWORD</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+    <button class="full-button" type="submit">Sign in</button>
+  </form>
+  <p class="muted" style="text-align:center">Accounts are created by the TimGym owner.</p>
+</main>
+{% endblock %}

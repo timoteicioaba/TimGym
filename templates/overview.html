@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block bar_lead %}<span class="eyebrow">{{ today.strftime("%A · %d %B") }}</span>{% endblock %}
+{% block heading %}Today{% endblock %}
+{% block bar_action %}<a class="bar-action" href="{{ url_for('settings') }}" aria-label="Account">{{ user.username[:1]|upper }}</a>{% endblock %}
+{% block content %}
+<section class="card" aria-label="This week">
+  <div class="week-strip">
+    {% for day in week %}
+    <div class="week-day{% if day.is_today %} today{% endif %}{% if day.future %} future{% endif %}">
+      <span>{{ day.label }}</span>
+      <span class="week-dot{% if day.gym %} gym{% endif %}{% if day.health %} health{% endif %}"
+            aria-label="{{ day.day }}{% if day.gym %}, gym session{% endif %}{% if day.health %}, activity{% endif %}">{{ day.day }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="week-legend"><span><i style="background:var(--accent)"></i>Gym</span><span><i style="background:#1a3446"></i>Activity</span></div>
+</section>
+
+<div class="stat-grid">
+  <div class="stat"><span class="stat-label">Days trained</span>
+    <span class="stat-value">{{ week_days }}<span class="stat-unit"> / 7</span></span><span class="stat-note">This week</span></div>
+  <div class="stat"><span class="stat-label">Active energy</span>
+    {% if has_health %}<span class="stat-value">{{ "{:,.0f}".format(week_kcal) }}<span class="stat-unit"> kcal</span></span><span class="stat-note">This week{% if steps_today %} · {{ "{:,.0f}".format(steps_today) }} steps today{% endif %}</span>
+    {% else %}<span class="stat-value">—</span><a class="stat-note" href="{{ url_for('settings') }}#apple-health">Connect Apple Health</a>{% endif %}</div>
+  <div class="stat"><span class="stat-label">Volume</span>
+    <span class="stat-value">{{ "{:,.0f}".format(week_volume) }}<span class="stat-unit"> kg</span></span><span class="stat-note">{{ week_sets }} sets this week</span></div>
+  <div class="stat"><span class="stat-label">Body weight</span>
+    <span class="stat-value">{% if latest_weight is not none %}{{ "%.1f"|format(latest_weight) }}<span class="stat-unit"> kg</span>{% else %}—{% endif %}</span>
+    <span class="stat-note">{% if weight_change is not none %}{% if weight_change > 0 %}+{% endif %}{{ "%.1f"|format(weight_change) }} kg since last{% else %}<a href="{{ url_for('log_page') }}#check-in">Add a check-in</a>{% endif %}</span></div>
+</div>
+
+{% if has_health %}
+<h2 class="section-title">Active energy <span>Last 7 days</span></h2>
+<section class="card">
+  <div class="bars" role="img" aria-label="Active energy for the last 7 days">
+    {% for item in kcal_by_day %}
+    <div class="bar{% if not item.value %} empty-day{% endif %}{% if item.is_today %} today{% endif %}" title="{{ item.value|round|int if item.value else 0 }} kcal">
+      <small>{% if item.value %}{{ item.value|round|int }}{% endif %}</small>
+      <div class="bar-fill" style="height:{{ item.height }}%"></div>
+      <span>{{ item.label }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<h2 class="section-title">Recent sessions</h2>
+{% if timeline %}
+<div class="list">
+  {% for entry in timeline %}
+  {% if entry.kind == "gym" %}
+  <div class="row" style="align-items:flex-start">
+    <span class="row-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/></svg></span>
+    <div class="row-main">
+      <span class="row-title">{{ entry.date|relative_day }} · Gym</span>
+      <ul class="session-exercises">
+        {% for exercise in entry.exercises %}<li><span>{{ exercise.name }}</span><span>{{ exercise.summary }}</span></li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% else %}
+  <div class="row">
+    <span class="row-icon health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
+    <div class="row-main">
+      <span class="row-title">{{ entry.activity }}</span>
+      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}</span>
+    </div>
+    {% if entry.active_kcal %}<div class="row-end"><strong>{{ entry.active_kcal|round|int }}</strong>kcal</div>{% endif %}
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">Nothing logged yet. Your sessions and Apple Health workouts will show up here.</p>
+{% endif %}
+
+<h2 class="section-title">Recent exercises</h2>
+{% if exercises %}
+<div class="list">
+  {% for exercise in exercises %}
+  <a class="row" href="{{ url_for('exercise_history', name=exercise.name) }}">
+    <div class="row-main">
+      <span class="row-title">{{ exercise.name }}</span>
+      <span class="row-sub">{{ exercise.last_date|relative_day }} · {{ exercise.summary }}</span>
+    </div>
+    <div class="row-end">
+      {% if exercise.top %}<strong>{{ exercise.top.weight_kg|kg }} kg</strong>{% endif %}
+      {% if exercise.change is not none and exercise.change != 0 %}<span class="{{ 'trend-up' if exercise.change > 0 else 'trend-down' }}">{{ '▲' if exercise.change > 0 else '▼' }} {{ exercise.change|abs|kg }} kg</span>
+      {% elif exercise.best %}best {{ exercise.best.weight_kg|kg }} kg{% endif %}
+    </div>
+    <span class="chevron" aria-hidden="true"></span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">Exercises you log will appear here with your latest and best sets.</p>
+{% endif %}
+
+<a class="button cta" href="{{ url_for('log_page') }}">Log a workout</a>
+{% endblock %}

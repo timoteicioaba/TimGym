@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} · TimGym{% endblock %}
+{% block bar_lead %}<a class="back" href="{{ url_for('index') }}">‹ Today</a>{% endblock %}
+{% block heading %}{{ name }}{% endblock %}
+{% block content %}
+<div class="stat-grid">
+  <div class="stat"><span class="stat-label">Best set</span>
+    <span class="stat-value">{% if best %}{{ best.weight_kg|kg }}<span class="stat-unit"> kg × {{ best.reps }}</span>{% else %}—{% endif %}</span></div>
+  <div class="stat"><span class="stat-label">Sessions</span>
+    <span class="stat-value">{{ entries|map(attribute='date')|unique|list|length }}</span><span class="stat-note">Since {{ entries[-1].date|relative_day }}</span></div>
+</div>
+<h2 class="section-title">History</h2>
+<div class="list">
+  {% for entry in entries %}
+  <div class="row">
+    <div class="row-main">
+      <span class="row-title">{{ entry.summary }}</span>
+      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.notes %} · {{ entry.notes }}{% endif %}</span>
+    </div>
+    {% if entry.volume %}<div class="row-end"><strong>{{ "{:,.0f}".format(entry.volume) }}</strong>kg volume</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -24,6 +24,58 @@ paths:
                 required: [username]
         "401":
           description: Missing or invalid API key
+  /api/health:
+    post:
+      operationId: importAppleHealth
+      summary: Import Apple Health workouts and daily totals
+      description: >-
+        Accepts Health Auto Export's REST API JSON (version 2, {"data": {"workouts": [...], "metrics": [...]}})
+        or a simple shape. Workouts are matched by id (or start time and name), and daily totals replace earlier
+        values for the same day, so re-sending data never creates duplicates. Energy in kJ and distances in miles
+        are converted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workouts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string, description: Activity name, e.g. Outdoor Run }
+                      start: { type: string, description: "ISO 8601 or yyyy-MM-dd HH:mm:ss Z" }
+                      duration_min: { type: number }
+                      active_kcal: { type: number }
+                      distance_km: { type: number }
+                    required: [name, start]
+                daily:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      date: { type: string, format: date }
+                      active_kcal: { type: number }
+                      steps: { type: number }
+                    required: [date]
+      responses:
+        "200":
+          description: Import summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workouts_saved: { type: integer }
+                  days_saved: { type: integer }
+                  skipped: { type: integer }
+        "400":
+          description: The payload could not be read
+        "401":
+          description: Missing or invalid API key
   /api/workouts:
     get:
       operationId: listMyWorkouts
