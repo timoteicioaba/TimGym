@@ -6,7 +6,9 @@
 <meta name="theme-color" content="#090d0b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+{# An opaque status bar keeps the page below it; with "black-translucent" the page runs
+   underneath and iOS blurs the strip just below the status bar (scroll edge effect). #}
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="TimGym">
 <link rel="manifest" href="{{ url_for('web_manifest') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">

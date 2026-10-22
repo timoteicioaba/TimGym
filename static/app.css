@@ -183,9 +183,9 @@ input.needs-value{border-color:var(--warn);background:#1a1609}
 .chip-small{padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:650;background:#18211c;color:#65736a;border:1px solid #232d27}
 .chip-small.on{background:#1f2e17;color:var(--accent);border-color:#3a4f27}
 
-/* Installed app (home screen): the status bar overlays the page, so give the
-   header a solid background and a little more room below it. */
+/* Installed app (home screen): the page starts below an opaque status bar; keep the
+   header solid with a little room above the title. */
 @media (display-mode: standalone){
-  .app-bar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;padding-top:calc(var(--safe-top) + 18px);border-bottom-color:#161e1a}
+  .app-bar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;padding-top:calc(var(--safe-top) + 14px);border-bottom-color:#161e1a}
   .login-shell{padding-top:calc(var(--safe-top) + 10vh)}
 }
