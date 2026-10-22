@@ -52,6 +52,26 @@ class HealthEndpointTests(unittest.TestCase):
         page = self.client.get("/settings").get_data(as_text=True)
         self.assertIn("unreadable start time", page)
 
+    def test_body_measurements_upsert_and_yield_to_manual_entries(self):
+        def weigh(day, kg):
+            return self.post({"data": {"metrics": [
+                {"name": "weight_body_mass", "units": "kg", "data": [{"date": f"{day} 07:00:00 +0300", "qty": kg}]}]}})
+        self.assertEqual(weigh("2026-09-01", 82.0).json["measurements_saved"], 1)
+        self.assertEqual(weigh("2026-09-01", 81.6).json["measurements_saved"], 1)
+        db = timgym.connect_db()
+        rows = db.execute("SELECT weight_kg, source FROM measurements WHERE measured_on = '2026-09-01'").fetchall()
+        self.assertEqual([tuple(row) for row in rows], [(81.6, "apple_health")])
+
+        # A manual check-in replaces the imported one and later syncs leave it alone.
+        with self.client.session_transaction() as session:
+            session["user_id"] = 1
+            session["_csrf"] = "token"
+        self.client.post("/measurements", data={"_csrf": "token", "measured_on": "2026-09-01", "weight_kg": "80.9"})
+        self.assertEqual(weigh("2026-09-01", 82.5).json["measurements_saved"], 0)
+        rows = db.execute("SELECT weight_kg, source FROM measurements WHERE measured_on = '2026-09-01'").fetchall()
+        self.assertEqual([tuple(row) for row in rows], [(80.9, None)])
+        db.close()
+
     def test_json_without_content_type(self):
         self.assertEqual(self.post(EXPORT, headers={"Content-Type": None}).status_code, 200)
         self.assertEqual(self.post(EXPORT, headers={"Content-Type": "text/plain"}).status_code, 200)

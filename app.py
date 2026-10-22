@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 import sys
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from getpass import getpass
 from pathlib import Path
@@ -148,7 +148,8 @@ def initialize_db():
                 "session_id": "TEXT",
                 "sets_json": "TEXT",
             },
-            "measurements": {"user_id": "INTEGER REFERENCES users(id)"},
+            # source is 'apple_health' for imported check-ins, NULL for ones entered in TimGym.
+            "measurements": {"user_id": "INTEGER REFERENCES users(id)", "source": "TEXT"},
         }.items():
             existing = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
             for name, definition in columns.items():
@@ -371,7 +372,9 @@ def gym_sessions(db, user_id, since=None, limit=None):
     sessions = {}
     for row in db.execute(query, params):
         key = row["session_id"] or f'day:{row["workout_date"]}'
-        session_entry = sessions.setdefault(key, {"kind": "gym", "date": row["workout_date"], "exercises": [], "sets": 0, "volume": 0.0})
+        session_entry = sessions.setdefault(key, {"kind": "gym", "date": row["workout_date"], "exercises": [], "sets": 0,
+                                                   "volume": 0.0, "logged_at": row["created_at"], "health": None})
+        session_entry["logged_at"] = min(session_entry["logged_at"], row["created_at"])
         sets = row_sets(row)
         session_entry["exercises"].append({"name": row["exercise"], "summary": summarize_sets(sets), "notes": row["notes"]})
         session_entry["sets"] += len(sets)
@@ -382,6 +385,48 @@ def gym_sessions(db, user_id, since=None, limit=None):
     for entry in sessions.values():
         entry["exercises"].reverse()  # in the order they were logged
     return list(sessions.values())
+
+
+STRENGTH_ACTIVITY_WORDS = ("strength", "core training", "cross training", "functional", "hiit", "high intensity")
+
+
+def is_strength_activity(name):
+    lowered = (name or "").casefold()
+    return any(word in lowered for word in STRENGTH_ACTIVITY_WORDS)
+
+
+def _aware(value, assume_tz):
+    moment = datetime.fromisoformat(value)
+    return moment if moment.tzinfo else moment.replace(tzinfo=assume_tz)
+
+
+def link_health_to_gym(gym, health):
+    """Pair each logged gym session with the Apple Health strength workout recorded for it.
+
+    A gym session matches a strength-type workout on the same date. When a day has
+    several, each log goes to the workout it was saved closest to (logs are usually
+    saved during or soon after the workout). Returns the health workouts left over.
+    """
+    local = LOCAL_TZ or timezone.utc
+    unmatched = list(health)
+    for session_entry in sorted(gym, key=lambda entry: entry["logged_at"]):
+        candidates = [w for w in unmatched if w["date"] == session_entry["date"] and is_strength_activity(w["activity"])]
+        if not candidates:
+            continue
+        logged = _aware(session_entry["logged_at"].replace(" ", "T"), timezone.utc)
+
+        def distance(workout):
+            start = _aware(workout["started_at"], local)
+            end = start + timedelta(seconds=workout["duration_s"] or 0)
+            if start - timedelta(minutes=30) <= logged <= end + timedelta(hours=4):
+                return timedelta(0), abs(logged - end)
+            return abs(logged - end), timedelta(0)
+
+        match = min(candidates, key=distance)
+        session_entry["health"] = match
+        match["linked_exercises"] = len(session_entry["exercises"])
+        unmatched.remove(match)
+    return unmatched
 
 
 def health_workouts(db, user_id, since=None, limit=None):
@@ -449,8 +494,10 @@ def index():
     monday = today - timedelta(days=today.weekday())
     week_gym = gym_sessions(db, user_id, since=monday)
     week_health = health_workouts(db, user_id, since=monday)
+    week_other = link_health_to_gym(week_gym, week_health)
     gym_days = {entry["date"] for entry in week_gym}
-    health_days = {entry["date"] for entry in week_health}
+    # A strength workout matched to a gym log is the same session, not extra activity.
+    health_days = {entry["date"] for entry in week_other}
     week = []
     for offset in range(7):
         day = monday + timedelta(days=offset)
@@ -481,13 +528,16 @@ def index():
     week_kcal = sum(item["value"] or 0 for day, item in zip(last7, kcal_by_day) if day >= monday)
     steps_today = daily.get((today.isoformat(), "steps"))
 
-    timeline = gym_sessions(db, user_id, limit=6) + health_workouts(db, user_id, limit=6)
-    timeline.sort(key=lambda entry: (entry["date"], entry.get("started_at") or ""), reverse=True)
+    recent_gym = gym_sessions(db, user_id, limit=6)
+    oldest = min((date.fromisoformat(entry["date"]) for entry in recent_gym), default=None)
+    recent_health = health_workouts(db, user_id, since=oldest) if oldest else health_workouts(db, user_id, limit=6)
+    timeline = recent_gym + link_health_to_gym(recent_gym, recent_health)
+    timeline.sort(key=lambda entry: (entry["date"], entry.get("started_at") or (entry.get("health") or {}).get("started_at") or ""), reverse=True)
     latest_weight, weight_change = body_weight_summary(db, user_id)
     week_minutes = round(sum(entry["duration_s"] or 0 for entry in week_health) / 60)
     return render_template(
         "overview.html", tab="home", today=today, week=week,
-        week_minutes=week_minutes, week_health_count=len(week_health),
+        week_minutes=week_minutes, week_session_count=len(week_gym) + len(week_other),
         week_days=len(gym_days | health_days), week_sets=sum(entry["sets"] for entry in week_gym),
         week_volume=sum(entry["volume"] for entry in week_gym), week_kcal=week_kcal,
         has_health=bool(daily_rows or health_week_kcal) or has_health_data(db, user_id),
@@ -561,11 +611,14 @@ def progress():
         chart_min = chart_max = None
         polyline = ""
     latest_weight, weight_change = body_weight_summary(db, user_id)
+    activities = health_workouts(db, user_id, limit=20)
+    if activities:
+        link_health_to_gym(gym_sessions(db, user_id, since=date.fromisoformat(activities[-1]["date"])), activities)
     return render_template(
         "progress.html", tab="progress", lift_charts=lift_progression(db, user_id),
         measurements=measurements, chart_points=chart_points, chart_min=chart_min, chart_max=chart_max,
         chart_polyline=polyline, latest_weight=latest_weight, weight_change=weight_change,
-        activities=health_workouts(db, user_id, limit=20),
+        activities=activities,
     )
 
 
@@ -681,6 +734,11 @@ def add_measurement():
         waist = number(request.form.get("waist_cm"), "Waist", 500)
         chest = number(request.form.get("chest_cm"), "Chest", 500)
         hips = number(request.form.get("hips_cm"), "Hips", 500)
+        # A check-in entered here replaces the Apple Health reading for that day.
+        get_db().execute(
+            "DELETE FROM measurements WHERE user_id = ? AND measured_on = ? AND source = 'apple_health'",
+            (g.user["id"], measured_on),
+        )
         get_db().execute(
             "INSERT INTO measurements (user_id, measured_on, weight_kg, body_fat_pct, waist_cm, chest_cm, hips_cm) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (g.user["id"], measured_on, weight, body_fat, waist, chest, hips),
@@ -870,6 +928,35 @@ def api_add_workout():
         return {"error": str(exc)}, 400
 
 
+def save_health_measurements(db, user_id, body):
+    """Store one Apple Health check-in per day, updated in place on re-sync.
+    A check-in entered in TimGym for the same day takes precedence."""
+    saved = 0
+    for day, values in sorted(body.items()):
+        rows = db.execute(
+            "SELECT id, source, weight_kg FROM measurements WHERE user_id = ? AND measured_on = ?", (user_id, day)
+        ).fetchall()
+        if any(row["source"] != "apple_health" for row in rows):
+            continue
+        existing = rows[0] if rows else None
+        weight = values.get("weight_kg", existing["weight_kg"] if existing else None)
+        if weight is None:
+            continue  # a check-in needs a body weight
+        if existing:
+            db.execute(
+                """UPDATE measurements SET weight_kg = ?, body_fat_pct = COALESCE(?, body_fat_pct),
+                   waist_cm = COALESCE(?, waist_cm) WHERE id = ?""",
+                (weight, values.get("body_fat_pct"), values.get("waist_cm"), existing["id"]),
+            )
+        else:
+            db.execute(
+                "INSERT INTO measurements (user_id, measured_on, weight_kg, body_fat_pct, waist_cm, source) VALUES (?, ?, ?, ?, ?, 'apple_health')",
+                (user_id, day, weight, values.get("body_fat_pct"), values.get("waist_cm")),
+            )
+        saved += 1
+    return saved
+
+
 @app.post("/api/health")
 @api_key_required
 def api_import_health():
@@ -900,8 +987,10 @@ def api_import_health():
            ON CONFLICT (user_id, day, metric) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP""",
         [(user_id, day, metric, value) for (day, metric), value in imported["daily"].items()],
     )
+    body_saved = save_health_measurements(db, user_id, imported["body"])
     summary = {
         "workouts_received": imported["received"]["workouts"],
+        "measurements_saved": body_saved,
         "workouts_saved": len(imported["workouts"]),
         "days_saved": len({day for day, _metric in imported["daily"]}),
         "metrics_received": imported["received"]["metrics"],

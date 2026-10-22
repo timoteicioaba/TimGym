@@ -2,7 +2,8 @@
 
 Two payload shapes are accepted:
 
-* Health Auto Export's REST API automation (JSON, version 2 recommended):
+* Health Auto Export's REST API automations (JSON, version 2 recommended), for
+  workouts, daily activity totals, and body measurements (weight, body fat, waist):
   {"data": {"workouts": [...], "metrics": [...]}}
 * A simple shape for Shortcuts or scripts:
   {"workouts": [{"id", "name", "start", "duration_min", "active_kcal", "distance_km"}],
@@ -17,6 +18,13 @@ _KJ_PER_KCAL = 4.184
 _KM_PER_UNIT = {"km": 1.0, "m": 0.001, "mi": 1.609344, "yd": 0.0009144, "ft": 0.0003048}
 # Health Auto Export metric name -> stored metric name
 _DAILY_METRICS = {"active_energy": "active_kcal", "step_count": "steps"}
+# Health Auto Export metric name -> (body measurement field, plausible range after conversion)
+_BODY_METRICS = {
+    "weight_body_mass": ("weight_kg", 20, 400),
+    "body_fat_percentage": ("body_fat_pct", 2, 75),
+    "waist_circumference": ("waist_cm", 30, 250),
+}
+_CM_PER_UNIT = {"cm": 1.0, "in": 2.54, "m": 100.0, "ft": 30.48, "mm": 0.1}
 MAX_ENTRIES = 20000
 MAX_SAMPLES_PER_METRIC = 200000  # a year of minute-level samples is still under this
 
@@ -146,6 +154,23 @@ def _workout(item):
     }, None
 
 
+def _body_value(field, qty, units):
+    amount, _ = _quantity(qty)
+    if amount is None:
+        return None
+    units = str(units or "").strip().lower()
+    if field == "weight_kg":
+        if units in ("lb", "lbs", "pound", "pounds"):
+            amount *= 0.45359237
+        elif units == "g":
+            amount /= 1000
+    elif field == "body_fat_pct" and amount <= 1:
+        amount *= 100  # Apple Health stores body fat as a fraction
+    elif field == "waist_cm":
+        amount *= _CM_PER_UNIT.get(units, 1.0)
+    return amount
+
+
 def _day(value):
     text = str(value or "").strip()[:10]
     try:
@@ -155,7 +180,7 @@ def _day(value):
 
 
 def normalize_health_payload(payload):
-    """Return {"workouts": [...], "daily": {(day, metric): value}, "skipped": n,
+    """Return {"workouts": [...], "daily": {(day, metric): value}, "body": {day: {field: value}}, "skipped": n,
     "skipped_reasons": [...], "received": {"workouts": n, "metrics": [names]}}."""
     if not isinstance(payload, dict):
         raise ValueError("Send a JSON object.")
@@ -182,7 +207,26 @@ def normalize_health_payload(payload):
             workouts[workout["external_id"]] = workout
 
     daily = {}
+    body_samples = {}  # (day, field) -> [values]
     for metric in raw_metrics:
+        if isinstance(metric, dict) and metric.get("name") in _BODY_METRICS:
+            field, low, high = _BODY_METRICS[metric["name"]]
+            samples = metric.get("data") or []
+            if not isinstance(samples, list) or len(samples) > MAX_SAMPLES_PER_METRIC:
+                skipped += 1
+                continue
+            for sample in samples:
+                day = _day(sample.get("date")) if isinstance(sample, dict) else None
+                value = _body_value(field, sample.get("qty") if isinstance(sample, dict) else None, metric.get("units"))
+                if day is None or value is None or not low <= value <= high:
+                    skipped += 1
+                    if len(reasons) < 5:
+                        reason = f'{metric["name"]}: unusable reading {sample.get("qty") if isinstance(sample, dict) else sample!r}'
+                        if reason not in reasons:
+                            reasons.append(reason)
+                    continue
+                body_samples.setdefault((day, field), []).append(value)
+            continue
         if not isinstance(metric, dict) or metric.get("name") not in _DAILY_METRICS:
             continue
         stored = _DAILY_METRICS[metric["name"]]
@@ -221,7 +265,13 @@ def normalize_health_payload(payload):
     for key, value in daily.items():
         limit = 20000 if key[1] == "active_kcal" else 500000
         daily[key] = round(min(value, limit), 1)
+    # Several readings in a day (e.g. two weigh-ins) average out; they are not a total.
+    body = {}
+    for (day, field), values in body_samples.items():
+        body.setdefault(day, {})[field] = round(sum(values) / len(values), 1)
+
     return {
-        "workouts": list(workouts.values()), "daily": daily, "skipped": skipped, "skipped_reasons": reasons,
+        "workouts": list(workouts.values()), "daily": daily, "body": body,
+        "skipped": skipped, "skipped_reasons": reasons,
         "received": {"workouts": len(raw_workouts), "metrics": [m.get("name") for m in raw_metrics if isinstance(m, dict)][:40]},
     }

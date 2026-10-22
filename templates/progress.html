@@ -36,7 +36,7 @@
   {% for row in measurements %}
   <div class="row">
     <div class="row-main"><span class="row-title">{{ "%.1f"|format(row.weight_kg) }} kg{% if row.body_fat_pct is not none %} <span class="muted">· {{ "%.1f"|format(row.body_fat_pct) }}% fat</span>{% endif %}</span>
-      <span class="row-sub">{{ row.measured_on|relative_day }}{% for label, value in [('Waist',row.waist_cm),('Chest',row.chest_cm),('Hips',row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</span></div>
+      <span class="row-sub">{% if row.source == "apple_health" %}<span class="health-badge">Apple Health</span> {% endif %}{{ row.measured_on|relative_day }}{% for label, value in [('Waist',row.waist_cm),('Chest',row.chest_cm),('Hips',row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</span></div>
   </div>
   {% endfor %}
 </div>
@@ -49,7 +49,7 @@
   <div class="row">
     <span class="row-icon health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
     <div class="row-main"><span class="row-title">{{ entry.activity }}</span>
-      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}</span></div>
+      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}{% if entry.linked_exercises %} · {{ entry.linked_exercises }} exercise{{ "" if entry.linked_exercises == 1 else "s" }} logged{% endif %}</span></div>
     {% if entry.active_kcal %}<div class="row-end"><strong>{{ entry.active_kcal|round|int }}</strong>kcal</div>{% endif %}
   </div>
   {% endfor %}

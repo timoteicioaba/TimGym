@@ -21,8 +21,8 @@
   {% for item in imports %}
   <div class="kv" style="display:block">
     <div style="display:flex;justify-content:space-between;gap:10px"><span>{{ item.received_at[:16] }} UTC</span>
-      <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}</span></div>
-    {% if item.workouts_received == 0 %}<p class="muted" style="margin:4px 0 0">No workouts were included in this export. In Health Auto Export, make sure workouts are part of an automation; they may need their own automation with the Workouts data type.</p>{% endif %}
+      <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}{% if item.measurements_saved %} · {{ item.measurements_saved }} check-in{{ "" if item.measurements_saved == 1 else "s" }}{% endif %}</span></div>
+    {% if item.workouts_received == 0 and not item.metrics_received %}<p class="muted" style="margin:4px 0 0">This export was empty. Check the automation's date range and selected data.</p>{% endif %}
     {% if item.skipped_reasons %}<p class="muted" style="margin:4px 0 0;color:var(--warn)">Skipped {{ item.skipped }}: {{ item.skipped_reasons|join("; ") }}</p>{% endif %}
   </div>
   {% endfor %}
@@ -32,11 +32,12 @@
     <p class="muted">Websites can’t read Apple Health directly, so an iPhone app sends it to TimGym. <strong>Health Auto Export</strong> (App Store) does this on a schedule; its automations need the app’s premium tier.</p>
     <ol class="steps">
       <li>Generate your TimGym key below{% if has_key %} (or use the one you already set up){% endif %}.</li>
-      <li>In Health Auto Export, create an <strong>Automation</strong> of type <strong>REST API</strong>.</li>
-      <li>URL: <code>{{ health_url }}</code></li>
-      <li>Add a header <code>Authorization</code> with the value <code>Bearer YOUR_KEY</code>.</li>
-      <li>Format <strong>JSON</strong>, export version <strong>2</strong>, aggregation <strong>Days</strong>.</li>
-      <li>Include the metrics <strong>Active Energy</strong> and <strong>Step Count</strong>. Workouts (strength training, elliptical, runs…) may need a <strong>second automation</strong> with the <strong>Workouts</strong> data type, using the same URL and header.</li>
+      <li>In Health Auto Export, create two <strong>Automations</strong> of type <strong>REST API</strong>, both with:
+        <br>URL <code>{{ health_url }}</code>
+        <br>header <code>Authorization</code> = <code>Bearer YOUR_KEY</code>
+        <br>format <strong>JSON</strong>, export version <strong>2</strong>, aggregation <strong>Days</strong>.</li>
+      <li><strong>Workouts</strong> automation: data type Workouts. Strength workouts are merged with the exercises you log in TimGym that day.</li>
+      <li><strong>Health metrics</strong> automation: Active Energy, Step Count, Weight, Body Fat Percentage, and Waist Circumference. Each day's body readings become one check-in on your weight chart; a check-in you enter yourself takes precedence.</li>
       <li>For the first manual export, pick a short range such as the last 7 days. Very long ranges can exceed the 50 MB upload limit.</li>
       <li>Pick a sync interval. The counts above update when TimGym receives data.</li>
     </ol>

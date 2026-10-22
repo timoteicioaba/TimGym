@@ -69,18 +69,21 @@ Set `TIMEZONE` (for example `TIMEZONE=Europe/Bucharest` in your environment or `
 Websites can't read Apple Health directly, so an iPhone app sends the data to TimGym. The tested route is [Health Auto Export](https://apps.apple.com/app/id1115567069). Its automations need the app's premium tier.
 
 1. In TimGym, open **Settings** and generate your API key.
-2. In Health Auto Export, create an **Automation** of type **REST API** with:
+2. In Health Auto Export, create two **Automations** of type **REST API**, both with:
    - URL: `https://gym.tim0tei.fun/api/health`
    - Header: `Authorization: Bearer YOUR_TIMGYM_KEY`
    - Format **JSON**, export version **2**, aggregation **Days**
-   - The metrics **Active Energy** and **Step Count**. Workouts may need a second automation with the **Workouts** data type, using the same URL and header.
+
+   The **Workouts** automation sends your Apple Health workouts. The **Health metrics** automation sends **Active Energy**, **Step Count**, **Weight**, **Body Fat Percentage**, and **Waist Circumference**.
 3. Run it once manually with a short range, such as the last 7 days. **Settings → Apple Health** shows how many workouts and days arrived. Uploads are limited to 50 MB, so sync long histories in parts.
 
 If Health Auto Export only reports “error”, run `docker compose logs --tail=20 timgym`. Every refused import is logged with its reason (for example an unknown API key, a body that is not JSON, or an upload over the limit). The JSON response also carries the reason in `error`.
 
 **Settings → Apple Health → Recent imports** shows what each sync contained and why any entry was skipped.
 
-Workouts are matched by their Apple Health ID and daily totals replace earlier values, so syncing the same days again never double-counts. Energy in kJ and distances in miles are converted. The endpoint also accepts a simpler JSON shape (see `/openapi.yaml`) for your own Shortcut or script.
+Workouts are matched by their Apple Health ID and daily totals replace earlier values, so syncing the same days again never double-counts. Body readings become one check-in per day on your weight chart, averaged if you weighed in more than once and updated on re-sync. A check-in you enter in TimGym for the same day takes precedence. Pounds and inches are converted.
+
+A strength-type Apple Health workout (traditional or functional strength, core, cross training, HIIT) and the exercises you log in TimGym on the same day are shown as one session, with Apple's time and calories next to your sets. Cardio such as runs or elliptical stays a separate entry. If you do two strength sessions in a day, each log is paired with the workout it was saved closest to. Energy in kJ and distances in miles are converted. The endpoint also accepts a simpler JSON shape (see `/openapi.yaml`) for your own Shortcut or script.
 
 ## Optional: connect a custom GPT Action
 

@@ -24,7 +24,7 @@
     {% else %}<span class="stat-value">—</span><a class="stat-note" href="{{ url_for('settings') }}#apple-health">Connect Apple Health</a>{% endif %}</div>
   <div class="stat"><span class="stat-label">Training time</span>
     {% if week_minutes %}<span class="stat-value">{% if week_minutes >= 60 %}{{ week_minutes // 60 }}<span class="stat-unit"> h </span>{{ "%02d"|format(week_minutes % 60) }}{% else %}{{ week_minutes }}{% endif %}<span class="stat-unit"> min</span></span>
-    <span class="stat-note">{{ week_health_count }} workout{{ "" if week_health_count == 1 else "s" }}{% if week_volume %} · {{ "{:,.0f}".format(week_volume) }} kg lifted{% endif %}</span>
+    <span class="stat-note">{{ week_session_count }} session{{ "" if week_session_count == 1 else "s" }}{% if week_volume %} · {{ "{:,.0f}".format(week_volume) }} kg lifted{% endif %}</span>
     {% elif week_volume %}<span class="stat-value">{{ "{:,.0f}".format(week_volume) }}<span class="stat-unit"> kg</span></span><span class="stat-note">Volume · {{ week_sets }} sets this week</span>
     {% else %}<span class="stat-value">—</span><span class="stat-note">No workouts yet this week</span>{% endif %}</div>
   <div class="stat"><span class="stat-label">Body weight</span>
@@ -55,7 +55,12 @@
   <div class="row" style="align-items:flex-start">
     <span class="row-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/></svg></span>
     <div class="row-main">
+      {% if entry.health %}
+      <span class="row-title wrap">{{ entry.date|relative_day }} · {{ entry.health.activity }}</span>
+      <span class="row-sub"><span class="health-badge">Apple Health</span>{% if entry.health.duration_s %} {{ entry.health.duration_s|duration }}{% endif %}{% if entry.health.active_kcal %} · {{ entry.health.active_kcal|round|int }} kcal{% endif %} · {{ entry.sets }} sets</span>
+      {% else %}
       <span class="row-title">{{ entry.date|relative_day }} · Gym</span>
+      {% endif %}
       <ul class="session-exercises">
         {% for exercise in entry.exercises %}<li><span>{{ exercise.name }}</span><span>{{ exercise.summary }}</span></li>{% endfor %}
       </ul>

@@ -41,10 +41,12 @@ a.row:active,.row.tappable:active{background:#ffffff08}
 .row-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .row-main{flex:1;min-width:0}
 .row-title{display:block;font-weight:650;font-size:.96rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-title.wrap{white-space:normal}
 .row-sub{display:block;color:var(--muted);font-size:.8rem;margin-top:2px;overflow-wrap:anywhere}
 .row-end{flex:0 0 auto;text-align:right;font-size:.82rem;color:var(--muted)}
 .row-end strong{display:block;color:var(--text);font-size:.95rem}
 .chevron{flex:0 0 auto;width:8px;height:8px;border-right:2px solid #56625a;border-top:2px solid #56625a;transform:rotate(45deg);margin-left:2px}
+.health-badge{display:inline-block;padding:1px 6px;margin-right:4px;border-radius:6px;background:#1a2b38;color:var(--blue);font-size:.68rem;font-weight:700;vertical-align:1px}
 .trend-up{color:var(--accent)}.trend-down{color:#ff9c8a}
 .session-exercises{margin:6px 0 0;padding:0;list-style:none}
 .session-exercises li{display:flex;justify-content:space-between;gap:10px;font-size:.84rem;padding:2px 0;color:#d4ddd6}

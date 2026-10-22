@@ -129,3 +129,21 @@ class TimestampTests(unittest.TestCase):
     def test_received_counts(self):
         result = normalize_health_payload(AUTO_EXPORT)
         self.assertEqual(result["received"], {"workouts": 3, "metrics": ["active_energy", "step_count", "heart_rate"]})
+
+
+class BodyMeasurementTests(unittest.TestCase):
+    def test_body_metrics_become_daily_check_ins(self):
+        result = normalize_health_payload({"data": {"metrics": [
+            {"name": "weight_body_mass", "units": "lb", "data": [
+                {"date": "2026-10-21 07:10:00 +0300", "qty": 181.0},
+                {"date": "2026-10-21 21:00:00 +0300", "qty": 182.0}]},
+            {"name": "body_fat_percentage", "units": "%", "data": [{"date": "2026-10-21 07:10:00 +0300", "qty": 0.185}]},
+            {"name": "waist_circumference", "units": "in", "data": [{"date": "2026-10-20 07:10:00 +0300", "qty": 33}]},
+            {"name": "weight_body_mass", "units": "kg", "data": [{"date": "2026-10-19 07:10:00 +0300", "qty": 3}]},
+        ]}})
+        self.assertEqual(result["body"], {
+            "2026-10-21": {"weight_kg": 82.3, "body_fat_pct": 18.5},  # two weigh-ins averaged
+            "2026-10-20": {"waist_cm": 83.8},
+        })
+        self.assertEqual(result["daily"], {})
+        self.assertIn("weight_body_mass: unusable reading 3", result["skipped_reasons"])
