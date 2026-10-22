@@ -245,7 +245,7 @@ a:hover{text-decoration:underline}
 .chart-line.range-1{stroke:#c7f36a}.chart-line.range-2{stroke:#75c8ff}.chart-line.range-3{stroke:#c69cff}
 .chart-point.range-1{fill:#c7f36a}.chart-point.range-2{fill:#75c8ff}.chart-point.range-3{fill:#c69cff}
 .lift-trends{display:grid;gap:14px}.lift-card{padding:14px;border:1px solid #28342d;border-radius:15px;background:#0c120f}.lift-card h3{margin:0;font-size:.96rem;letter-spacing:-.02em}.range-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 0;color:var(--muted);font-size:.72rem}.range-legend span{display:flex;align-items:center;gap:5px}.legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-dot.range-1{background:#c7f36a}.legend-dot.range-2{background:#75c8ff}.legend-dot.range-3{background:#c69cff}
-.workout-preview{margin-top:14px;padding:14px;border:1px solid #3a4b3d;border-radius:14px;background:#0b100d}.workout-preview h3{margin:0 0 10px;font-size:.95rem}.preview-exercise{padding:10px 0;border-top:1px solid #253029}.preview-exercise:first-child{border-top:0;padding-top:0}.preview-exercise strong{display:block}.preview-exercise small{display:block;color:var(--muted);margin-top:4px}.missing-detail-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}.missing-detail-fields input:last-child{grid-column:1/-1}.preview-set-row{display:grid;grid-template-columns:48px 1fr 1fr;align-items:center;gap:8px;margin-top:8px;color:var(--muted);font-size:.82rem}.preview-set-row input{min-height:42px}
+.workout-preview{margin-top:14px;padding:14px;border:1px solid #3a4b3d;border-radius:14px;background:#0b100d}.workout-preview h3{margin:0 0 10px;font-size:.95rem}.preview-exercise{padding:10px 0;border-top:1px solid #253029}.preview-exercise:first-child{border-top:0;padding-top:0}.preview-exercise strong{display:block}.preview-exercise small{display:block;color:var(--muted);margin-top:4px}.preview-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.preview-head h3{margin:0}.preview-head input{width:auto;min-height:40px}.exercise-head{display:flex;gap:8px}.exercise-head input{font-weight:700}.preview-set-row{display:grid;grid-template-columns:30px minmax(0,1fr) minmax(0,1fr) 42px;align-items:center;gap:8px;margin-top:8px;color:var(--muted);font-size:.82rem}.preview-set-row.with-rpe{grid-template-columns:30px minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) 42px}.preview-set-row input{min-height:42px}.set-columns{margin-top:10px;font-size:.7rem;font-weight:650;letter-spacing:.04em;text-transform:uppercase}.icon-button{min-height:42px;width:42px;padding:0;flex:0 0 42px;background:#202b24;color:var(--muted);border:1px solid #344239;font-size:1.1rem}.small-button{min-height:38px;padding:7px 12px;margin-top:10px;font-size:.82rem}.notes-input{margin-top:10px;min-height:42px}input.needs-value{border-color:#e0a84a;background:#1a1609}
 .model-progress{height:5px;margin-top:12px;border-radius:999px;background:#253029;overflow:hidden}.model-progress span{display:block;width:35%;height:100%;border-radius:999px;background:var(--accent);animation:model-progress-slide 1.2s ease-in-out infinite alternate}@keyframes model-progress-slide{from{transform:translateX(0)}to{transform:translateX(185%)}}
 .diagnostics{margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;padding:12px;border-radius:12px;background:#0b100d;color:#d5e2d7;font:.77rem/1.45 ui-monospace,monospace}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:13px}
@@ -351,19 +351,19 @@ DASHBOARD = """
 </section>
 <section class="panel" id="workout-log">
   <div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Log a workout</h2></div><span class="panel-kicker">Fast local parser</span></div>
-  <p class="muted" style="margin:0 0 13px">Write it naturally or use a format like “Squat 3x5 @ 80 kg”. The parser previews recognizable exercises and adds fields for missing set or rep details.</p>
+  <p class="muted" style="margin:0 0 13px">Write it the way you would in a notes app — “Bench 60x8, 70x6, 80x5”, “Squat 3x5 @ 100”, “Deadlift 140 for 5”, one exercise per line. Everything stays editable before you save.</p>
   <label for="workout-note">YOUR WORKOUT</label>
-  <textarea id="workout-note" maxlength="4000" placeholder="Example: Squat 3x5 @ 80 kg; bench press 3 sets of 8 at 60 kg."></textarea>
+  <textarea id="workout-note" maxlength="4000" placeholder="Squat 100kg 5,5,4&#10;Bench 60x8, 70x6, 80x5 felt strong&#10;Pull ups 3x10"></textarea>
   <button class="full-button" id="interpret-workout" type="button" style="margin-top:12px">Parse workout</button>
   <div class="workout-preview" id="workout-preview" hidden>
-    <h3>Review before saving</h3>
-    <p class="panel-kicker" id="workout-preview-date"></p>
+    <div class="preview-head"><h3>Review before saving</h3><input id="workout-date" type="date" aria-label="Workout date"></div>
     <div id="workout-preview-content"></div>
+    <button class="secondary small-button" id="add-exercise" type="button">+ Add exercise</button>
     <button class="full-button" id="save-workout" type="button" style="margin-top:12px">Save workout</button>
   </div>
+  <datalist id="known-exercises">{% for name in known_exercises %}<option value="{{ name }}">{% endfor %}</datalist>
   <div class="model-progress" id="model-progress" hidden aria-hidden="true"><span></span></div>
   <p class="panel-kicker" id="workout-ai-status" role="status" aria-live="polite" style="margin:10px 0 0">Your note is parsed locally; nothing is saved until you review it.</p>
-  <p class="panel-kicker" id="workout-model-live-status" role="status" aria-live="polite" style="margin:5px 0 0">Parser status: ready.</p>
   <p class="panel-kicker" style="margin:8px 0 0"><a href="{{ url_for('connection') }}">Parser and connection settings</a></p>
 </section>
 <section class="panel" id="log">
@@ -401,32 +401,129 @@ const csrfToken = {{ csrf|tojson }};
 let pendingWorkout = null;
 const noteField = document.getElementById("workout-note");
 const status = document.getElementById("workout-ai-status");
-const liveModelStatus = document.getElementById("workout-model-live-status");
 const progress = document.getElementById("model-progress");
 const preview = document.getElementById("workout-preview");
 const previewContent = document.getElementById("workout-preview-content");
-const previewDate = document.getElementById("workout-preview-date");
+const dateInput = document.getElementById("workout-date");
 const interpretButton = document.getElementById("interpret-workout");
+const addExerciseButton = document.getElementById("add-exercise");
 const saveButton = document.getElementById("save-workout");
 
-function updateSaveAvailability() {
-  const exercises = pendingWorkout?.exercises || [];
-  const complete = exercises.length > 0 && exercises.every(exercise =>
-    !exercise._invalidWeight && exercise.sets.length > 0 && exercise.sets.every(set =>
-      !set._invalidWeight && Number.isInteger(Number(set.reps)) && Number(set.reps) >= 1 && Number(set.reps) <= 999 &&
-      (set.weight_kg === null || set.weight_kg === undefined ||
-        (Number.isFinite(Number(set.weight_kg)) && Number(set.weight_kg) >= 0 && Number(set.weight_kg) <= 2000))
-    )
-  );
-  saveButton.disabled = !complete;
-  if (exercises.length && !complete) {
-    status.textContent = "Fill in the missing details above to enable saving.";
-  } else if (complete) {
-    status.textContent = "Review the details, then save when they look right.";
-  }
+const blank = value => value === null || value === undefined || value === "";
+const validReps = value => Number.isInteger(value) && value >= 1 && value <= 999;
+const validWeight = value => blank(value) || (Number.isFinite(value) && value >= 0 && value <= 2000);
+const validRpe = value => blank(value) || (Number.isFinite(value) && value >= 1 && value <= 10);
+const validName = name => name.trim().length > 0 && name.trim().length <= 80;
+
+function readNumber(input) {
+  return input.value === "" ? null : Number(input.value);
 }
 
-interpretButton.addEventListener("click", async function () {
+function makeInput(attrs, value, onChange, isValid) {
+  const input = document.createElement("input");
+  Object.assign(input, attrs);
+  if (attrs["aria-label"]) input.setAttribute("aria-label", attrs["aria-label"]);
+  input.value = blank(value) ? "" : value;
+  const check = () => input.classList.toggle("needs-value", !isValid(input));
+  input.addEventListener("input", () => { onChange(input); check(); updateSaveAvailability(); });
+  check();
+  return input;
+}
+
+function makeButton(text, className, label, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.textContent = text;
+  if (label) button.setAttribute("aria-label", label);
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function workoutIsComplete() {
+  const exercises = pendingWorkout?.exercises || [];
+  return Boolean(dateInput.value) && exercises.length > 0 && exercises.every(exercise =>
+    validName(exercise.name) && exercise.sets.length > 0 && exercise.sets.length <= 99 &&
+    exercise.sets.every(set => validReps(set.reps) && validWeight(set.weight_kg) && validRpe(set.rpe))
+  );
+}
+
+function updateSaveAvailability() {
+  const complete = workoutIsComplete();
+  saveButton.disabled = !complete;
+  status.textContent = complete
+    ? "Check the details, then save when they look right."
+    : "Fill in the highlighted fields to enable saving.";
+}
+
+function renderSetRow(exercise, set, index, showRpe) {
+  const row = document.createElement("div");
+  row.className = "preview-set-row" + (showRpe ? " with-rpe" : "");
+  const label = document.createElement("span");
+  label.textContent = String(index + 1);
+  const where = exercise.name + " set " + (index + 1);
+  row.append(
+    label,
+    makeInput({type: "number", inputMode: "numeric", min: "1", max: "999", step: "1", placeholder: "Reps", "aria-label": where + " reps"},
+      set.reps, input => { set.reps = readNumber(input); }, input => validReps(readNumber(input))),
+    makeInput({type: "number", inputMode: "decimal", min: "0", max: "2000", step: "0.5", placeholder: "kg", "aria-label": where + " weight in kg (optional)"},
+      set.weight_kg, input => { set.weight_kg = readNumber(input); }, input => validWeight(readNumber(input)))
+  );
+  if (showRpe) {
+    row.append(makeInput({type: "number", inputMode: "decimal", min: "1", max: "10", step: "0.5", placeholder: "RPE", "aria-label": where + " RPE (optional)"},
+      set.rpe, input => { set.rpe = readNumber(input); }, input => validRpe(readNumber(input))));
+  }
+  row.append(makeButton("×", "icon-button", "Remove " + where, () => {
+    exercise.sets.splice(index, 1);
+    renderPreview();
+  }));
+  return row;
+}
+
+function renderExercise(exercise, exerciseIndex) {
+  const item = document.createElement("div");
+  item.className = "preview-exercise";
+  const head = document.createElement("div");
+  head.className = "exercise-head";
+  const nameInput = makeInput({type: "text", maxLength: 80, placeholder: "Exercise", "aria-label": "Exercise name"},
+    exercise.name, input => { exercise.name = input.value; }, input => validName(input.value));
+  nameInput.setAttribute("list", "known-exercises");
+  head.append(nameInput, makeButton("×", "icon-button", "Remove " + (exercise.name || "exercise"), () => {
+    pendingWorkout.exercises.splice(exerciseIndex, 1);
+    renderPreview();
+  }));
+  item.append(head);
+
+  const showRpe = exercise.sets.some(set => !blank(set.rpe));
+  const columns = document.createElement("div");
+  columns.className = "preview-set-row set-columns" + (showRpe ? " with-rpe" : "");
+  for (const text of ["Set", "Reps", "kg", ...(showRpe ? ["RPE"] : []), ""]) {
+    const cell = document.createElement("span");
+    cell.textContent = text;
+    columns.append(cell);
+  }
+  item.append(columns);
+  exercise.sets.forEach((set, index) => item.append(renderSetRow(exercise, set, index, showRpe)));
+
+  item.append(makeButton("+ Add set", "secondary small-button", "Add a set to " + (exercise.name || "this exercise"), () => {
+    const last = exercise.sets[exercise.sets.length - 1];
+    exercise.sets.push(last ? {...last} : {reps: null, weight_kg: exercise.default_weight_kg ?? null, rpe: null});
+    renderPreview();
+  }));
+  const notes = makeInput({type: "text", maxLength: 500, placeholder: "Notes (optional)", "aria-label": "Notes for " + (exercise.name || "exercise")},
+    exercise.notes, input => { exercise.notes = input.value; }, () => true);
+  notes.classList.add("notes-input");
+  item.append(notes);
+  return item;
+}
+
+function renderPreview() {
+  previewContent.replaceChildren(...pendingWorkout.exercises.map(renderExercise));
+  preview.hidden = false;
+  updateSaveAvailability();
+}
+
+async function interpretNote() {
   const note = noteField.value.trim();
   if (!note) {
     status.textContent = "Write a workout first.";
@@ -434,11 +531,8 @@ interpretButton.addEventListener("click", async function () {
   }
   interpretButton.disabled = true;
   saveButton.disabled = true;
-  preview.hidden = true;
   progress.hidden = false;
-  pendingWorkout = null;
-  status.textContent = "Parsing your workout locally…";
-  liveModelStatus.textContent = "Parser status: reading the workout structure…";
+  status.textContent = "Parsing your workout…";
   try {
     const response = await fetch("{{ url_for('interpret_workout') }}", {
       method: "POST",
@@ -452,149 +546,47 @@ interpretButton.addEventListener("click", async function () {
       return;
     }
     pendingWorkout = result.workout;
-    previewDate.textContent = "Workout date · " + pendingWorkout.date;
-    previewContent.replaceChildren();
-    for (const exercise of pendingWorkout.exercises) {
-      const item = document.createElement("div");
-      item.className = "preview-exercise";
-      const name = document.createElement("strong");
-      name.textContent = exercise.name;
-      item.append(name);
-
-      if (!exercise.sets.length) {
-        const prompt = document.createElement("small");
-        prompt.textContent = "Add or check the missing details:";
-        item.append(prompt);
-        const fields = document.createElement("div");
-        fields.className = "missing-detail-fields";
-        const setsInput = document.createElement("input");
-        setsInput.type = "number";
-        setsInput.min = "1";
-        setsInput.max = "99";
-        setsInput.step = "1";
-        setsInput.placeholder = "Sets";
-        setsInput.setAttribute("aria-label", exercise.name + " sets");
-        const repsInput = document.createElement("input");
-        repsInput.type = "number";
-        repsInput.min = "1";
-        repsInput.max = "999";
-        repsInput.step = "1";
-        repsInput.placeholder = "Reps per set";
-        repsInput.setAttribute("aria-label", exercise.name + " reps per set");
-        const weightInput = document.createElement("input");
-        weightInput.type = "number";
-        weightInput.min = "0";
-        weightInput.max = "2000";
-        weightInput.step = "0.1";
-        weightInput.placeholder = "Weight kg (optional)";
-        weightInput.value = exercise.default_weight_kg ?? "";
-        weightInput.setAttribute("aria-label", exercise.name + " weight in kg (optional)");
-        fields.append(setsInput, repsInput, weightInput);
-        item.append(fields);
-        const syncFields = () => {
-          const count = Number(setsInput.value);
-          const reps = Number(repsInput.value);
-          const weight = weightInput.value === "" ? null : Number(weightInput.value);
-          exercise._invalidWeight = weight !== null && (!Number.isFinite(weight) || weight < 0 || weight > 2000);
-          exercise.sets = Number.isInteger(count) && count >= 1 && count <= 99
-            ? Array.from({length: count}, () => ({
-                reps: Number.isInteger(reps) && reps >= 1 && reps <= 999 ? reps : null,
-                weight_kg: weight !== null && Number.isFinite(weight) && weight >= 0 && weight <= 2000 ? weight : null
-              }))
-            : [];
-          updateSaveAvailability();
-        };
-        setsInput.addEventListener("input", syncFields);
-        repsInput.addEventListener("input", syncFields);
-        weightInput.addEventListener("input", syncFields);
-      } else {
-        exercise.sets.forEach((set, index) => {
-          const row = document.createElement("div");
-          row.className = "preview-set-row";
-          const label = document.createElement("span");
-          label.textContent = "Set " + (index + 1);
-          row.append(label);
-          const repsInput = document.createElement("input");
-          repsInput.type = "number";
-          repsInput.min = "1";
-          repsInput.max = "999";
-          repsInput.step = "1";
-          repsInput.placeholder = "Reps";
-          repsInput.setAttribute("aria-label", exercise.name + " set " + (index + 1) + " reps");
-          if (set.reps === null || set.reps === undefined) {
-            row.append(repsInput);
-            repsInput.addEventListener("input", () => {
-              const value = Number(repsInput.value);
-              set.reps = Number.isInteger(value) && value >= 1 && value <= 999 ? value : null;
-              updateSaveAvailability();
-            });
-          } else {
-            const reps = document.createElement("span");
-            reps.textContent = set.reps + " reps";
-            row.append(reps);
-          }
-
-          if (set.weight_kg !== null && set.weight_kg !== undefined) {
-            const load = document.createElement("span");
-            load.textContent = set.weight_kg + " kg";
-            row.append(load);
-          } else {
-            const weightInput = document.createElement("input");
-            weightInput.type = "number";
-            weightInput.min = "0";
-            weightInput.max = "2000";
-            weightInput.step = "0.1";
-            weightInput.placeholder = "Weight kg (optional)";
-            weightInput.setAttribute("aria-label", exercise.name + " set " + (index + 1) + " weight in kg (optional)");
-            row.append(weightInput);
-            weightInput.addEventListener("input", () => {
-              const value = weightInput.value === "" ? null : Number(weightInput.value);
-              set._invalidWeight = value !== null && (!Number.isFinite(value) || value < 0 || value > 2000);
-              set.weight_kg = value !== null && !set._invalidWeight ? value : null;
-              updateSaveAvailability();
-            });
-          }
-          item.append(row);
-        });
-      }
-
-      if (exercise.notes) {
-        const notes = document.createElement("small");
-        notes.textContent = exercise.notes;
-        item.append(notes);
-      }
-      previewContent.append(item);
-    }
-    preview.hidden = false;
-    updateSaveAvailability();
+    dateInput.value = pendingWorkout.date;
+    renderPreview();
   } catch (error) {
     status.textContent = error.message;
-    liveModelStatus.textContent = "Parser status: unable to parse this note.";
   } finally {
     progress.hidden = true;
     interpretButton.disabled = false;
-    if (pendingWorkout) liveModelStatus.textContent = "Parser status: ready for review.";
-    else if (!status.textContent.startsWith("Parser status:")) liveModelStatus.textContent = "Parser status: ready.";
   }
+}
+
+interpretButton.addEventListener("click", interpretNote);
+noteField.addEventListener("keydown", event => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) interpretNote();
 });
 noteField.addEventListener("input", function () {
-  if (pendingWorkout) {
-    pendingWorkout = null;
-    preview.hidden = true;
-    saveButton.disabled = true;
-    status.textContent = "Workout text changed. Interpret it again before saving.";
-  }
+  if (pendingWorkout) status.textContent = "Your note changed. Parse again to refresh the preview, or save the preview as it is.";
+});
+dateInput.addEventListener("input", updateSaveAvailability);
+addExerciseButton.addEventListener("click", () => {
+  pendingWorkout.exercises.push({name: "", notes: "", default_weight_kg: null, sets: [{reps: null, weight_kg: null, rpe: null}]});
+  renderPreview();
+  previewContent.lastElementChild.querySelector("input").focus();
 });
 
 saveButton.addEventListener("click", async function () {
-  if (!pendingWorkout) return;
+  if (!pendingWorkout || !workoutIsComplete()) return;
   saveButton.disabled = true;
   status.textContent = "Saving workout…";
+  const payload = {
+    date: dateInput.value,
+    exercises: pendingWorkout.exercises.map(exercise => ({
+      name: exercise.name.trim(),
+      notes: (exercise.notes || "").trim(),
+      sets: exercise.sets.map(set => ({reps: set.reps, weight_kg: blank(set.weight_kg) ? null : set.weight_kg, rpe: blank(set.rpe) ? null : set.rpe}))
+    }))
+  };
   try {
     const response = await fetch("{{ url_for('save_web_workout') }}", {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
-      body: JSON.stringify(pendingWorkout)
+      body: JSON.stringify(payload)
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Could not save workout.");
@@ -618,7 +610,7 @@ CONNECTION_PAGE = """
 <section class="welcome"><div class="eyebrow">SETUP</div><h1>Connection</h1><p>Fast local parsing and optional integrations.</p></section>
 {% if new_api_key %}<section class="panel"><div class="panel-heading"><h2>Your new TimGym key</h2></div><p class="muted">Copy it now; it is shown only once. Anyone with this key can add workouts to your account.</p><div class="key-box">{{ new_api_key }}</div></section>{% endif %}
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Workout parser</h2></div></div>
-<p class="muted">Workout notes are interpreted by a deterministic parser running in TimGym. It recognizes common phrasing, including “Squat 3x5 @ 80 kg”, “Bench press: 3 sets of 8 at 60 lb”, and multiple exercises separated by commas, semicolons, or “then”. Pounds are converted to kilograms. Recognizable exercises stay in the preview when details are missing, with fields to fill them in before saving.</p>
+<p class="muted">Workout notes are interpreted by a deterministic parser running in TimGym. It understands gym shorthand such as “Squat 3x5 @ 80”, “Bench 60x8, 70x6, 80x5”, “Deadlift 140 for 5”, “OHP 40kg 8,8,7”, and “3 sets of 8 at 60 lb”, with one exercise per line or separated by commas, semicolons, or “then”. Numbers without a unit are kilograms; pounds are converted. Every detail stays editable in the preview before saving.</p>
 <p class="panel-kicker">No model download, external AI service, or extra API cost. Nothing is saved until you review and confirm.</p>
 </section>
 <section class="panel"><div class="panel-heading"><div class="panel-title-mark"><span class="panel-dot"></span><h2>Optional ChatGPT connection</h2></div></div>
@@ -681,6 +673,7 @@ def index():
         details = json.loads(row["sets_json"]) if row["sets_json"] else []
         item["set_summary"] = ", ".join(
             f'{one["reps"]} reps' + (f' @ {one["weight_kg"]:g} kg' if one.get("weight_kg") is not None else "")
+            + (f' RPE {one["rpe"]:g}' if one.get("rpe") is not None else "")
             for one in details
         ) if details else f'{row["reps"]} reps' + (f' @ {row["weight_kg"]:g} kg' if row["weight_kg"] is not None else "")
         workouts.append(item)
@@ -766,6 +759,7 @@ def index():
             "chart_min": chart_low, "chart_max": chart_high,
             "first_date": first_date, "last_date": last_date,
         })
+    known_exercises = known_exercise_names(g.user["id"])
     week_count = db.execute(
         "SELECT COUNT(*) FROM workouts WHERE user_id = ? AND workout_date >= date('now', '-6 days')",
         (g.user["id"],),
@@ -776,7 +770,17 @@ def index():
         latest_weight=latest_weight, weight_change=weight_change, week_count=week_count,
         workouts=workouts, measurements=measurements, chart_points=chart_points,
         chart_min=chart_min, chart_max=chart_max, chart_polyline=polyline, lift_charts=lift_charts,
+        known_exercises=known_exercises,
     )
+
+
+def known_exercise_names(user_id):
+    """Exercise names the user has logged, most recently used first."""
+    rows = get_db().execute(
+        "SELECT exercise FROM workouts WHERE user_id = ? GROUP BY exercise COLLATE NOCASE ORDER BY MAX(id) DESC LIMIT 200",
+        (user_id,),
+    ).fetchall()
+    return [row["exercise"] for row in rows]
 
 
 @app.get("/connection")
@@ -896,7 +900,7 @@ def interpret_workout():
     note = str(payload.get("note", "")).strip()
     if not note:
         return {"error": "Write a workout first."}, 400
-    parsed = parse_workout_note(note)
+    parsed = parse_workout_note(note, known_exercises=known_exercise_names(g.user["id"]))
     if "clarification" in parsed:
         return {"clarification": parsed["clarification"]}
     draft = parsed["workout"]
