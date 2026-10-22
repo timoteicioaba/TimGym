@@ -305,6 +305,6 @@ def normalize_health_payload(payload):
     return {
         "workouts": list(workouts.values()), "daily": daily, "body": body,
         "skipped": skipped, "skipped_reasons": reasons,
-        "received": {"workouts": len(raw_workouts), "metrics": [m.get("name") for m in raw_metrics if isinstance(m, dict)][:40]},
-        "unused_metrics": unused[:40],
+        "received": {"workouts": len(raw_workouts), "metrics": [m.get("name") for m in raw_metrics if isinstance(m, dict)][:100]},
+        "unused_metrics": unused[:100],
     }

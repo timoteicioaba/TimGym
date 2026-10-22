@@ -163,3 +163,33 @@ class NutritionTests(unittest.TestCase):
             ("2026-10-21", "carbs_g"): 210.0, ("2026-10-21", "fat_g"): 70.0,
         })
         self.assertEqual(result["unused_metrics"], ["heart_rate"])
+
+
+class RealExportShapeTests(unittest.TestCase):
+    """Mirrors the structure of an actual Health Auto Export v2 file (values made up)."""
+
+    def test_v2_export_shape(self):
+        result = normalize_health_payload({"data": {
+            "workouts": [{
+                "id": "45550693-6A6C-4B11-BBAC-A4863C81469B", "name": "Traditional Strength Training",
+                "start": "2026-10-21 17:29:10 +0300", "end": "2026-10-21 18:21:00 +0300", "duration": 3110.4,
+                "activeEnergyBurned": {"qty": 2443.0, "units": "kJ"}, "totalEnergy": {"units": "kJ", "qty": 2900.0},
+                "activeEnergy": [{"units": "kJ", "source": "", "qty": 35.0, "date": "2026-10-21 17:29:00 +0300"}],
+                "heartRateData": [], "isIndoor": True, "location": "Indoor", "distance": None,
+            }],
+            "metrics": [
+                {"name": "dietary_energy", "units": "kJ", "data": [{"qty": 5502.0, "date": "2026-10-21 00:00:00 +0300", "source": "MyFitnessPal"}]},
+                {"name": "active_energy", "units": "kJ", "data": [{"qty": 3224.0, "date": "2026-10-21 00:00:00 +0300", "source": "Watch"}]},
+                {"name": "body_fat_percentage", "units": "%", "data": [{"qty": 35.8, "date": "2026-10-21 00:00:00 +0300", "source": "Scale"}]},
+                {"name": "weight_body_mass", "units": "kg", "data": [{"qty": 115.8, "date": "2026-10-21 00:00:00 +0300", "source": "Scale"}]},
+                {"name": "heart_rate", "units": "count/min", "data": [{"Max": 150, "Avg": 80, "Min": 50, "date": "2026-10-21 00:00:00 +0300"}]},
+                {"name": "sleep_analysis", "units": "hr", "data": [{"totalSleep": 7.1, "date": "2026-10-21 00:00:00 +0300"}]},
+            ],
+        }})
+        (workout,) = result["workouts"]
+        self.assertEqual((workout["workout_date"], workout["duration_s"], workout["active_kcal"], workout["distance_km"]),
+                         ("2026-10-21", 3110, 583.9, None))
+        self.assertEqual(result["daily"], {("2026-10-21", "kcal_in"): 1315.0, ("2026-10-21", "active_kcal"): 770.5})
+        self.assertEqual(result["body"], {"2026-10-21": {"weight_kg": 115.8, "body_fat_pct": 35.8}})
+        self.assertEqual(result["unused_metrics"], ["heart_rate", "sleep_analysis"])
+        self.assertEqual(result["skipped"], 0)

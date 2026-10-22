@@ -393,6 +393,11 @@ def gym_sessions(db, user_id, since=None, limit=None):
     return list(sessions.values())
 
 
+@app.template_test("strength")
+def strength_test(name):
+    return is_strength_activity(name)
+
+
 STRENGTH_ACTIVITY_WORDS = ("strength", "core training", "cross training", "functional", "hiit", "high intensity")
 
 
@@ -504,9 +509,11 @@ def index():
     week_gym = gym_sessions(db, user_id, since=monday)
     week_health = health_workouts(db, user_id, since=monday)
     week_other = link_health_to_gym(week_gym, week_health)
-    gym_days = {entry["date"] for entry in week_gym}
-    # A strength workout matched to a gym log is the same session, not extra activity.
-    health_days = {entry["date"] for entry in week_other}
+    # Strength days are gym logs plus Apple Health strength workouts not logged yet;
+    # a matched workout is the same session, not extra activity.
+    gym_days = {entry["date"] for entry in week_gym} | {
+        entry["date"] for entry in week_other if is_strength_activity(entry["activity"])}
+    health_days = {entry["date"] for entry in week_other if not is_strength_activity(entry["activity"])}
     week = []
     for offset in range(7):
         day = monday + timedelta(days=offset)
@@ -519,8 +526,8 @@ def index():
     unlogged_today = [w for w in week_other if w["date"] == today_iso and is_strength_activity(w["activity"])]
 
     recent_gym = gym_sessions(db, user_id, limit=4)
-    oldest = min((date.fromisoformat(entry["date"]) for entry in recent_gym), default=None)
-    recent_health = health_workouts(db, user_id, since=oldest) if oldest else health_workouts(db, user_id, limit=4)
+    # Enough Apple Health workouts to cover the matches for those logs and the latest activity.
+    recent_health = health_workouts(db, user_id, limit=12)
     timeline = recent_gym + link_health_to_gym(recent_gym, recent_health)
     timeline.sort(key=lambda entry: (entry["date"], entry.get("started_at") or (entry.get("health") or {}).get("started_at") or ""), reverse=True)
 

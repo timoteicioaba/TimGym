@@ -27,7 +27,7 @@
     </div>
     {% endfor %}
   </div>
-  <div class="week-legend"><span><i style="background:var(--accent)"></i>Gym</span><span><i style="background:#1a3446"></i>Other activity</span></div>
+  <div class="week-legend"><span><i style="background:var(--accent)"></i>Strength</span><span><i style="background:#1a3446"></i>Other activity</span></div>
 </section>
 <div class="stat-grid">
   <div class="stat"><span class="stat-label">Days trained</span>
@@ -46,7 +46,7 @@
     <div class="row-main">
       {% if entry.health %}
       <span class="row-title wrap">{{ entry.date|relative_day }} · {{ entry.health.activity }}</span>
-      <span class="row-sub"><span class="health-badge">Apple Health</span>{% if entry.health.duration_s %} {{ entry.health.duration_s|duration }}{% endif %}{% if entry.health.active_kcal %} · {{ entry.health.active_kcal|round|int }} kcal{% endif %} · {{ entry.sets }} sets</span>
+      <span class="row-sub"><span class="health-badge">Apple Health</span>{% if entry.health.duration_s %} {{ entry.health.duration_s|duration }}{% endif %}{% if entry.health.active_kcal %} · {{ entry.health.active_kcal|round|int }} kcal{% endif %} · {{ entry.sets }} set{{ "" if entry.sets == 1 else "s" }}</span>
       {% else %}
       <span class="row-title">{{ entry.date|relative_day }} · Gym</span>
       {% endif %}
@@ -55,6 +55,16 @@
       </ul>
     </div>
   </div>
+  {% elif entry.activity is strength and not entry.linked_exercises %}
+  <a class="row" href="{{ url_for('log_page', session=entry.id) }}">
+    <span class="row-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/></svg></span>
+    <div class="row-main">
+      <span class="row-title">{{ entry.activity }}</span>
+      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %} · <span style="color:var(--accent)">Add exercises</span></span>
+    </div>
+    {% if entry.active_kcal %}<div class="row-end"><strong>{{ entry.active_kcal|round|int }}</strong>kcal</div>{% endif %}
+    <span class="chevron" aria-hidden="true"></span>
+  </a>
   {% else %}
   <div class="row">
     <span class="row-icon health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
