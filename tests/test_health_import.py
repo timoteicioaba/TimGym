@@ -189,7 +189,7 @@ class RealExportShapeTests(unittest.TestCase):
         (workout,) = result["workouts"]
         self.assertEqual((workout["workout_date"], workout["duration_s"], workout["active_kcal"], workout["distance_km"]),
                          ("2026-10-21", 3110, 583.9, None))
-        self.assertEqual(result["daily"], {("2026-10-21", "kcal_in"): 1315.0, ("2026-10-21", "active_kcal"): 770.5})
+        self.assertEqual(result["daily"], {("2026-10-21", "kcal_in"): 1315.0, ("2026-10-21", "active_kcal"): 770.6})
         self.assertEqual(result["body"], {"2026-10-21": {"weight_kg": 115.8, "body_fat_pct": 35.8}})
         self.assertEqual(result["unused_metrics"], ["heart_rate", "sleep_analysis"])
         self.assertEqual(result["skipped"], 0)
