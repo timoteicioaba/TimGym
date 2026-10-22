@@ -185,6 +185,17 @@ def _body_value(field, qty, units):
     return amount
 
 
+def metric_group(name):
+    """Which part of TimGym a metric feeds: "activity", "nutrition", "body", or None."""
+    key = _metric_key(name)
+    if key in _BODY_METRICS:
+        return "body"
+    stored = _DAILY_METRICS.get(key)
+    if stored in ("kcal_in", "protein_g", "carbs_g", "fat_g"):
+        return "nutrition"
+    return "activity" if stored else None
+
+
 def _metric_key(name):
     """"Dietary Energy" or "dietary-energy" -> "dietary_energy"."""
     return re.sub(r"[^a-z0-9]+", "_", str(name or "").casefold()).strip("_")

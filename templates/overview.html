@@ -102,34 +102,45 @@
 <a class="button cta" href="{{ url_for('log_page') }}">Log a workout</a>
 
 {# ---------------- Nutrition ---------------- #}
-<h2 class="section-title">Nutrition <span>Today</span></h2>
+{% set food_is_old = food_day and food_day != today %}
+<h2 class="section-title">Nutrition <span>{% if food_is_old %}No food logged today yet{% else %}Today{% endif %}</span></h2>
 <section class="card">
   <div class="energy-row">
-    <div><span class="stat-label">Eaten</span><strong>{% if nutrition.kcal_in is defined %}{{ "{:,.0f}".format(nutrition.kcal_in) }}{% else %}—{% endif %}</strong><small>kcal</small></div>
-    <div><span class="stat-label">Burned</span><strong>{% if nutrition.active_kcal is defined %}{{ "{:,.0f}".format(nutrition.active_kcal) }}{% else %}—{% endif %}</strong><small>active kcal</small></div>
+    <div><span class="stat-label">Eaten</span><strong>{% if food and (food.kcal_in or macros) %}{{ "{:,.0f}".format(food.kcal_in or macros.kcal) }}{% else %}—{% endif %}</strong><small>kcal{% if food_is_old %} · {{ food_day|relative_day }}{% endif %}</small></div>
+    <div><span class="stat-label">Burned</span><strong>{% if nutrition.active_kcal is defined %}{{ "{:,.0f}".format(nutrition.active_kcal) }}{% else %}—{% endif %}</strong><small>active kcal today</small></div>
     <div><span class="stat-label">Steps</span><strong>{% if nutrition.steps is defined %}{{ "{:,.0f}".format(nutrition.steps) }}{% else %}—{% endif %}</strong><small>today</small></div>
   </div>
-  {% if macro_share %}
-  <div class="macro-bar" role="img" aria-label="Macronutrient split">
-    <span class="macro-protein" style="width:{{ macro_share.protein }}%"></span><span class="macro-carbs" style="width:{{ macro_share.carbs }}%"></span><span class="macro-fat" style="width:{{ macro_share.fat }}%"></span>
+  {% if macros %}
+  <div class="macro-bar" role="img" aria-label="Share of calories from protein, carbs, and fat">
+    {% for item in macros["items"] %}<span class="macro-{{ item.key }}" style="width:{{ item.share }}%"></span>{% endfor %}
   </div>
-  <div class="macro-legend">
-    <span><i class="macro-protein"></i>Protein <strong>{{ (nutrition.protein_g or 0)|round|int }} g</strong></span>
-    <span><i class="macro-carbs"></i>Carbs <strong>{{ (nutrition.carbs_g or 0)|round|int }} g</strong></span>
-    <span><i class="macro-fat"></i>Fat <strong>{{ (nutrition.fat_g or 0)|round|int }} g</strong></span>
+  <div class="macro-grid">
+    {% for item in macros["items"] %}
+    <div class="macro-cell">
+      <span class="macro-name"><i class="macro-{{ item.key }}"></i>{{ item.label }}</span>
+      <strong>{% if item.grams is not none %}{{ item.grams|round|int }}<small> g</small>{% else %}—{% endif %}</strong>
+      <span class="muted" title="{{ item.kcal|round|int }} kcal">{{ item.share }}% of calories</span>
+      {% if week_average and week_average[item.key ~ "_g"] is not none %}<span class="muted">7-day avg {{ week_average[item.key ~ "_g"] }}&nbsp;g</span>{% endif %}
+    </div>
+    {% endfor %}
   </div>
+  {% elif food %}
+  <p class="muted" style="margin:14px 0 0">No protein, carbs, or fat in this day's data. Add <strong>Protein</strong>, <strong>Carbohydrates</strong>, and <strong>Total Fat</strong> to your Health metrics automation to see macros.</p>
   {% endif %}
   {% if has_nutrition %}
-  <div class="bars intake" role="img" aria-label="Calories eaten over the last 7 days">
+  <div class="bars intake" role="img" aria-label="Calories eaten over the last 7 days, split by macronutrient">
     {% for item in intake_days %}
     <div class="bar{% if not item.eaten %} empty-day{% endif %}{% if item.is_today %} today{% endif %}">
       <small>{% if item.eaten %}{{ item.eaten|round|int }}{% endif %}</small>
-      <div class="bar-fill" style="height:{{ item.height }}%"></div>
+      {% if item.split %}
+      <div class="bar-stack" style="height:{{ item.height }}%">{% for part in item.split["items"]|reverse %}<span class="macro-{{ part.key }}" style="flex:{{ part.kcal }}"></span>{% endfor %}</div>
+      {% else %}<div class="bar-fill" style="height:{{ item.height }}%"></div>{% endif %}
       <span>{{ item.label }}</span>
     </div>
     {% endfor %}
   </div>
-  {% if average_eaten %}<p class="muted" style="margin:10px 0 0">Average {{ "{:,}".format(average_eaten) }} kcal/day over the logged days of the last 7.</p>{% endif %}
+  {% if week_average and week_average.kcal_in %}<p class="muted" style="margin:10px 0 0">7-day average {{ "{:,}".format(week_average.kcal_in) }} kcal over {{ logged_food_days }} logged day{{ "" if logged_food_days == 1 else "s" }}.</p>{% endif %}
+  {% if not food %}<p class="muted" style="margin:10px 0 0">No food in the last 7 days. Check that your Health metrics automation includes Dietary Energy, Protein, Carbohydrates, and Total Fat.</p>{% endif %}
   {% else %}
   <p class="muted" style="margin:14px 0 0">Log meals in an app that writes to Apple Health (such as MyFitnessPal, Lose It!, or Cronometer), then add <strong>Dietary Energy</strong>, <strong>Protein</strong>, <strong>Carbohydrates</strong>, and <strong>Total Fat</strong> to your Health metrics automation. <a href="{{ url_for('settings') }}#apple-health">Setup</a></p>
   {% endif %}

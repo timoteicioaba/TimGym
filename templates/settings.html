@@ -23,6 +23,10 @@
     <div style="display:flex;justify-content:space-between;gap:10px"><span>{{ item.received_at[:16] }} UTC</span>
       <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}{% if item.measurements_saved %} · {{ item.measurements_saved }} check-in{{ "" if item.measurements_saved == 1 else "s" }}{% endif %}</span></div>
     {% if item.workouts_received == 0 and not item.metrics_received %}<p class="muted" style="margin:4px 0 0">This export was empty. Check the automation's date range and selected data.</p>{% endif %}
+    <div class="import-groups">
+      {% if item.workouts_received %}<span class="chip-small on">Workouts {{ item.workouts_received }}</span>{% endif %}
+      {% for label in ["Activity", "Nutrition", "Body"] %}<span class="chip-small{% if label in item.groups %} on{% endif %}">{{ label }}{% if label not in item.groups %} ✕{% endif %}</span>{% endfor %}
+    </div>
     {% if item.metrics_unused %}<p class="muted" style="margin:4px 0 0">Received but not used: {{ item.metrics_unused|join(", ") }}</p>{% endif %}
     {% if item.skipped_reasons %}<p class="muted" style="margin:4px 0 0;color:var(--warn)">Skipped {{ item.skipped }}: {{ item.skipped_reasons|join("; ") }}</p>{% endif %}
   </div>

@@ -1,5 +1,5 @@
 import hashlib
-from datetime import date
+from datetime import date, timedelta
 import json
 import os
 import sys
@@ -108,8 +108,29 @@ class HealthEndpointTests(unittest.TestCase):
         self.login()
         page = self.client.get("/").get_data(as_text=True)
         self.assertIn("2,150", page)
-        self.assertIn("160 g", page)
+        self.assertIn("160<small> g</small>", page)
         self.assertIn("81.4", page)
+
+    def test_nutrition_falls_back_to_the_latest_day_with_food(self):
+        db = timgym.connect_db()
+        db.execute("DELETE FROM health_daily")
+        db.commit()
+        db.close()
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        self.post({"data": {"metrics": [
+            {"name": "dietary_energy", "units": "kJ", "data": [{"date": f"{yesterday} 00:00:00 +0000", "qty": 8368}]},
+            {"name": "protein", "units": "g", "data": [{"date": f"{yesterday} 00:00:00 +0000", "qty": 150}]},
+            {"name": "carbohydrates", "units": "g", "data": [{"date": f"{yesterday} 00:00:00 +0000", "qty": 200}]},
+            {"name": "total_fat", "units": "g", "data": [{"date": f"{yesterday} 00:00:00 +0000", "qty": 80}]},
+        ]}})
+        self.login()
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn("No food logged today yet", page)
+        self.assertIn("2,000", page)              # 8368 kJ
+        self.assertIn("150<small> g</small>", page)
+        self.assertIn('title="600 kcal">28% of calories', page)  # protein: 150 g × 4 = 600 of 2,120 kcal
+        settings = self.client.get("/settings").get_data(as_text=True)
+        self.assertIn('class="chip-small on">Nutrition', settings)
 
     def test_json_without_content_type(self):
         self.assertEqual(self.post(EXPORT, headers={"Content-Type": None}).status_code, 200)

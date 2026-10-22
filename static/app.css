@@ -162,9 +162,6 @@ input.needs-value{border-color:var(--warn);background:#1a1609}
 .energy-row small{color:var(--muted);font-size:.72rem}
 .macro-bar{display:flex;height:10px;margin-top:16px;border-radius:999px;overflow:hidden;background:#1f2924}
 .macro-protein{background:#75c8ff}.macro-carbs{background:#c7f36a}.macro-fat{background:#ffb35c}
-.macro-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:9px;font-size:.8rem;color:var(--muted)}
-.macro-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
-.macro-legend strong{color:var(--text);font-weight:650;margin-left:2px}
 .bars.intake{margin-top:16px;height:104px}
 .bars.intake .bar-fill{background:linear-gradient(180deg,#d5f78b,#9fd447)}
 .body-head{display:flex;justify-content:space-between;gap:12px}
@@ -173,3 +170,15 @@ input.needs-value{border-color:var(--warn);background:#1a1609}
 .sparkline{display:block;width:100%;height:56px;margin-top:12px}
 .sparkline polyline{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
 .session-banner{display:flex;align-items:center;gap:10px;padding:11px 13px;margin:0 0 12px;border-radius:14px;background:#1a2b38;color:#d9f0ff;font-size:.88rem}
+.macro-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+.macro-cell{display:flex;flex-direction:column;gap:2px;padding:10px;border-radius:14px;background:#0c120f;border:1px solid #1f2924}
+.macro-cell strong{font-size:1.3rem;letter-spacing:-.03em}
+.macro-cell strong small{font-size:.75rem;color:var(--muted);font-weight:500}
+.macro-cell .muted{font-size:.72rem}
+.macro-name{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.74rem;font-weight:650}
+.macro-name i{display:inline-block;width:8px;height:8px;border-radius:50%}
+.bar-stack{display:flex;flex-direction:column;width:100%;max-width:30px;min-height:4px;border-radius:8px 8px 4px 4px;overflow:hidden}
+.bar-stack span{display:block;min-height:1px}
+.import-groups{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip-small{padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:650;background:#18211c;color:#65736a;border:1px solid #232d27}
+.chip-small.on{background:#1f2e17;color:var(--accent);border-color:#3a4f27}

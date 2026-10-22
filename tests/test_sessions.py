@@ -53,3 +53,13 @@ class LinkSessionsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MacroTests(unittest.TestCase):
+    def test_macro_breakdown(self):
+        from app import macro_breakdown
+        result = macro_breakdown({"protein_g": 150, "carbs_g": 200, "fat_g": 80})
+        self.assertEqual(result["kcal"], 2120)
+        self.assertEqual([(item["key"], item["kcal"], item["share"]) for item in result["items"]],
+                         [("protein", 600, 28), ("carbs", 800, 38), ("fat", 720, 34)])
+        self.assertIsNone(macro_breakdown({"protein_g": None}))

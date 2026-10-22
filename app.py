@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
-from health_import import normalize_health_payload
+from health_import import metric_group, normalize_health_payload
 from workout_parser import parse_workout_note
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -544,26 +544,34 @@ def index():
         if workout_kcal:
             today_values["active_kcal"] = workout_kcal
     has_nutrition = db.execute(
-        "SELECT EXISTS(SELECT 1 FROM health_daily WHERE user_id = ? AND metric = 'kcal_in')", (user_id,)
+        "SELECT EXISTS(SELECT 1 FROM health_daily WHERE user_id = ? AND metric IN ('kcal_in', 'protein_g', 'carbs_g', 'fat_g'))", (user_id,)
     ).fetchone()[0] == 1
-    macro_kcal = {
-        "protein": (today_values.get("protein_g") or 0) * 4,
-        "carbs": (today_values.get("carbs_g") or 0) * 4,
-        "fat": (today_values.get("fat_g") or 0) * 9,
-    }
-    macro_total = sum(macro_kcal.values())
-    macro_share = {name: round(100 * value / macro_total) for name, value in macro_kcal.items()} if macro_total else None
+
+    def food(iso):
+        values = {metric: daily.get((iso, metric)) for metric in NUTRITION_METRICS}
+        return values if any(value is not None for value in values.values()) else None
+
+    # Show today's food, or the latest day in the past week that has some, so the card is never blank.
+    food_day = next((day for day in reversed(last7) if food(day.isoformat())), None)
+    food_values = food(food_day.isoformat()) if food_day else None
+    macros = macro_breakdown(food_values) if food_values else None
+
     intake_days = []
     for day in last7:
-        iso = day.isoformat()
-        intake_days.append({
-            "label": day.strftime("%a")[0], "is_today": day == today,
-            "eaten": daily.get((iso, "kcal_in")), "burned": daily.get((iso, "active_kcal")),
-        })
+        values = food(day.isoformat()) or {}
+        split = macro_breakdown(values) if values else None
+        eaten = values.get("kcal_in") or (split["kcal"] if split else None)
+        intake_days.append({"label": day.strftime("%a")[0], "is_today": day == today, "eaten": eaten, "split": split})
     peak = max((item["eaten"] or 0 for item in intake_days), default=0)
     for item in intake_days:
         item["height"] = round(100 * (item["eaten"] or 0) / peak) if peak else 0
-    logged_days = [item["eaten"] for item in intake_days if item["eaten"]]
+    logged = [food(day.isoformat()) for day in last7 if food(day.isoformat())]
+
+    def average(metric):
+        values = [values[metric] for values in logged if values.get(metric) is not None]
+        return round(sum(values) / len(values)) if values else None
+
+    week_average = {metric: average(metric) for metric in NUTRITION_METRICS} if logged else None
 
     # Body
     body_rows = db.execute(
@@ -590,10 +598,30 @@ def index():
         week_minutes=round(sum(entry["duration_s"] or 0 for entry in week_health) / 60),
         week_volume=sum(entry["volume"] for entry in week_gym), week_sets=sum(entry["sets"] for entry in week_gym),
         timeline=timeline[:4], exercises=recent_exercises(db, user_id, limit=4),
-        nutrition=today_values, has_nutrition=has_nutrition, macro_share=macro_share, intake_days=intake_days,
-        average_eaten=round(sum(logged_days) / len(logged_days)) if logged_days else None,
+        nutrition=today_values, has_nutrition=has_nutrition, intake_days=intake_days,
+        food_day=food_day, food=food_values, macros=macros, week_average=week_average, logged_food_days=len(logged),
         body=body,
     )
+
+
+NUTRITION_METRICS = ("kcal_in", "protein_g", "carbs_g", "fat_g")
+
+
+def macro_breakdown(values):
+    """Grams, calories, and share of calories for protein, carbs, and fat."""
+    per_gram = {"protein": 4, "carbs": 4, "fat": 9}
+    grams = {name: values.get(f"{name}_g") for name in per_gram}
+    kcal = {name: (grams[name] or 0) * factor for name, factor in per_gram.items()}
+    total = sum(kcal.values())
+    if not total:
+        return None
+    return {
+        "kcal": total,
+        "items": [
+            {"key": name, "label": name.capitalize(), "grams": grams[name], "kcal": kcal[name], "share": round(100 * kcal[name] / total)}
+            for name in per_gram
+        ],
+    }
 
 
 def sparkline(points, width=300, height=56):
@@ -767,10 +795,12 @@ def render_settings(new_api_key=None):
         {"u": user_id},
     ).fetchone()
     has_key = db.execute("SELECT 1 FROM api_tokens WHERE user_id = ?", (user_id,)).fetchone() is not None
-    imports = [
-        dict(json.loads(row["summary_json"]), received_at=row["received_at"])
-        for row in db.execute("SELECT received_at, summary_json FROM health_imports WHERE user_id = ? ORDER BY id DESC LIMIT 5", (user_id,))
-    ]
+    imports = []
+    for row in db.execute("SELECT received_at, summary_json FROM health_imports WHERE user_id = ? ORDER BY id DESC LIMIT 5", (user_id,)):
+        item = dict(json.loads(row["summary_json"]), received_at=row["received_at"])
+        groups = {metric_group(name) for name in item.get("metrics_received", [])}
+        item["groups"] = [label for key, label in (("activity", "Activity"), ("nutrition", "Nutrition"), ("body", "Body")) if key in groups]
+        imports.append(item)
     return render_template(
         "settings.html", tab="settings", new_api_key=new_api_key, has_key=has_key,
         health_url=url_for("api_import_health", _external=True), sync=sync, imports=imports,
