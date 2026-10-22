@@ -21,11 +21,11 @@
   {% for item in imports %}
   <div class="kv" style="display:block">
     <div style="display:flex;justify-content:space-between;gap:10px"><span>{{ item.received_at[:16] }} UTC</span>
-      <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}{% if item.measurements_saved %} · {{ item.measurements_saved }} check-in{{ "" if item.measurements_saved == 1 else "s" }}{% endif %}</span></div>
+      <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}{% if item.measurements_saved %} · {{ item.measurements_saved }} check-in{{ "" if item.measurements_saved == 1 else "s" }}{% endif %}{% if item.nights_saved %} · {{ item.nights_saved }} night{{ "" if item.nights_saved == 1 else "s" }}{% endif %}</span></div>
     {% if item.workouts_received == 0 and not item.metrics_received %}<p class="muted" style="margin:4px 0 0">This export was empty. Check the automation's date range and selected data.</p>{% endif %}
     <div class="import-groups">
       {% if item.workouts_received %}<span class="chip-small on">Workouts {{ item.workouts_received }}</span>{% endif %}
-      {% for label in ["Activity", "Nutrition", "Body"] %}<span class="chip-small{% if label in item.groups %} on{% endif %}">{{ label }}{% if label not in item.groups %} ✕{% endif %}</span>{% endfor %}
+      {% for label in ["Activity", "Nutrition", "Sleep", "Body"] %}<span class="chip-small{% if label in item.groups %} on{% endif %}">{{ label }}{% if label not in item.groups %} ✕{% endif %}</span>{% endfor %}
     </div>
     {% if item.metrics_unused %}<p class="muted" style="margin:4px 0 0">Received but not used: {{ item.metrics_unused|join(", ") }}</p>{% endif %}
     {% if item.skipped_reasons %}<p class="muted" style="margin:4px 0 0;color:var(--warn)">Skipped {{ item.skipped }}: {{ item.skipped_reasons|join("; ") }}</p>{% endif %}
@@ -42,7 +42,7 @@
         <br>header <code>Authorization</code> = <code>Bearer YOUR_KEY</code>
         <br>format <strong>JSON</strong>, export version <strong>2</strong>, aggregation <strong>Days</strong>.</li>
       <li><strong>Workouts</strong> automation: data type Workouts. Strength workouts are merged with the exercises you log in TimGym that day.</li>
-      <li><strong>Health metrics</strong> automation: Active Energy, Step Count, Weight, Body Fat Percentage, Waist Circumference, and for nutrition Dietary Energy, Protein, Carbohydrates, and Total Fat (written to Apple Health by food apps such as MyFitnessPal, Lose It!, or Cronometer). Each day's body readings become one check-in on your weight chart; a check-in you enter yourself takes precedence.</li>
+      <li><strong>Health metrics</strong> automation: Active Energy, Step Count, Weight, Body Fat Percentage, Waist Circumference, Sleep Analysis, and for nutrition Dietary Energy, Protein, Carbohydrates, and Total Fat (written to Apple Health by food apps such as MyFitnessPal, Lose It!, or Cronometer). Each day's body readings become one check-in on your weight chart; a check-in you enter yourself takes precedence.</li>
       <li>For the first manual export, pick a short range such as the last 7 days. Very long ranges can exceed the 50 MB upload limit.</li>
       <li>Pick a sync interval. The counts above update when TimGym receives data.</li>
     </ol>

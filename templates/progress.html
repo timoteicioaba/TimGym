@@ -42,6 +42,28 @@
 </div>
 {% endif %}
 
+{% if sleep_chart %}
+<h2 class="section-title">Sleep <span>Last 30 nights</span></h2>
+<section class="card">
+  <div class="sleep-summary">
+    <div><span class="stat-label">Average</span><strong>{{ sleep_chart.average_total|hours }}</strong></div>
+    {% if sleep_chart.average_deep %}<div><span class="stat-label">Deep</span><strong>{{ sleep_chart.average_deep|hm }}</strong></div>{% endif %}
+    {% if sleep_chart.average_rem %}<div><span class="stat-label">REM</span><strong>{{ sleep_chart.average_rem|hm }}</strong></div>{% endif %}
+  </div>
+  <div class="sleep-chart" role="img" aria-label="Hours asleep each night for the last 30 nights, split by stage">
+    <span class="sleep-goal" style="bottom:calc(16px + (100% - 16px) * {{ (8 / sleep_chart.scale)|round(3) }})"><small>8 h</small></span>
+    {% for night in sleep_chart.nights %}
+    <a class="sleep-col" href="{{ url_for('index', day=night.date) }}" title="{{ night.date }} · {{ night.total|hours if night.total else 'No data' }}">
+      <span class="sleep-stack">{% for part in night.segments|reverse %}<span class="stage-{{ part.key }}" style="height:{{ part.height }}%"></span>{% endfor %}</span>
+      <small>{{ night.label }}</small>
+    </a>
+    {% endfor %}
+  </div>
+  <div class="stage-legend" style="margin-top:10px"><span><i class="stage-deep"></i>Deep</span><span><i class="stage-core"></i>Core</span><span><i class="stage-rem"></i>REM</span></div>
+  <p class="muted" style="margin:8px 0 0">{{ sleep_chart.count }} night{{ "" if sleep_chart.count == 1 else "s" }} recorded. Tap a night to open that day.</p>
+</section>
+{% endif %}
+
 {% if activities %}
 <h2 class="section-title">Apple Health workouts</h2>
 <div class="list">

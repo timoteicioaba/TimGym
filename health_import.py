@@ -3,7 +3,7 @@
 Two payload shapes are accepted:
 
 * Health Auto Export's REST API automations (JSON, version 2 recommended), for
-  workouts, daily activity totals, and body measurements (weight, body fat, waist):
+  workouts, daily activity totals, nutrition, sleep, and body measurements:
   {"data": {"workouts": [...], "metrics": [...]}}
 * A simple shape for Shortcuts or scripts:
   {"workouts": [{"id", "name", "start", "duration_min", "active_kcal", "distance_km"}],
@@ -190,10 +190,56 @@ def metric_group(name):
     key = _metric_key(name)
     if key in _BODY_METRICS:
         return "body"
+    if key == "sleep_analysis":
+        return "sleep"
     stored = _DAILY_METRICS.get(key)
     if stored in ("kcal_in", "protein_g", "carbs_g", "fat_g"):
         return "nutrition"
     return "activity" if stored else None
+
+
+_SLEEP_STAGES = ("deep", "core", "rem", "awake")
+
+
+def _sleep_night(sample, units):
+    """One aggregated sleep_analysis entry -> (night, None) or (None, reason).
+
+    Health Auto Export files a night under the morning it ended ("date"), with
+    stage durations in hours: totalSleep (or asleep), deep, core, rem, awake.
+    """
+    if not isinstance(sample, dict):
+        return None, "sleep_analysis: an entry was not an object"
+    day = _day(sample.get("date") or sample.get("sleepEnd"))
+    scale = 1 / 60 if str(units or "hr").lower() in ("min", "minute", "minutes") else 1.0
+
+    def hours(key):
+        amount, _ = _quantity(sample.get(key))
+        return round(amount * scale, 2) if amount is not None and 0 <= amount * scale <= 24 else None
+
+    stages = {stage: hours(stage) for stage in _SLEEP_STAGES}
+    total = hours("totalSleep") or hours("asleep") or (
+        sum(stages[stage] or 0 for stage in ("deep", "core", "rem")) or None)
+    if day is None or not total:
+        return None, "sleep_analysis: use aggregation Days so each night arrives as one entry"
+    start = _timestamp(sample.get("sleepStart") or sample.get("inBedStart"))
+    end = _timestamp(sample.get("sleepEnd") or sample.get("inBedEnd"))
+    return {
+        "day": day, "total_h": total, **{f"{stage}_h": stages[stage] for stage in _SLEEP_STAGES},
+        "start": start.isoformat() if start else None, "end": end.isoformat() if end else None,
+    }, None
+
+
+def _add_sleep(nights, night):
+    """Several entries for one morning (e.g. a nap) add up; the span covers them all."""
+    existing = nights.get(night["day"])
+    if existing is None:
+        nights[night["day"]] = night
+        return
+    for key in ("total_h", "deep_h", "core_h", "rem_h", "awake_h"):
+        if night[key] is not None:
+            existing[key] = round((existing[key] or 0) + night[key], 2)
+    existing["start"] = min(filter(None, (existing["start"], night["start"])), default=None)
+    existing["end"] = max(filter(None, (existing["end"], night["end"])), default=None)
 
 
 def _metric_key(name):
@@ -246,9 +292,20 @@ def normalize_health_payload(payload):
     daily = {}
     body_samples = {}  # (day, field) -> [values]
     unused = []
+    sleep = {}
     for metric in raw_metrics:
         if isinstance(metric, dict):
             metric = dict(metric, name=_metric_key(metric.get("name")))
+        if isinstance(metric, dict) and metric["name"] == "sleep_analysis":
+            for sample in metric.get("data") or []:
+                night, reason = _sleep_night(sample, metric.get("units"))
+                if night is None:
+                    skipped += 1
+                    if reason not in reasons and len(reasons) < 5:
+                        reasons.append(reason)
+                else:
+                    _add_sleep(sleep, night)
+            continue
         if isinstance(metric, dict) and metric["name"] not in _BODY_METRICS and metric["name"] not in _DAILY_METRICS:
             if metric["name"] and metric["name"] not in unused:
                 unused.append(metric["name"])
@@ -314,7 +371,7 @@ def normalize_health_payload(payload):
         body.setdefault(day, {})[field] = round(sum(values) / len(values), 1)
 
     return {
-        "workouts": list(workouts.values()), "daily": daily, "body": body,
+        "workouts": list(workouts.values()), "daily": daily, "body": body, "sleep": sleep,
         "skipped": skipped, "skipped_reasons": reasons,
         "received": {"workouts": len(raw_workouts), "metrics": [m.get("name") for m in raw_metrics if isinstance(m, dict)][:100]},
         "unused_metrics": unused[:100],

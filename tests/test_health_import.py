@@ -191,5 +191,29 @@ class RealExportShapeTests(unittest.TestCase):
                          ("2026-10-21", 3110, 583.9, None))
         self.assertEqual(result["daily"], {("2026-10-21", "kcal_in"): 1315.0, ("2026-10-21", "active_kcal"): 770.6})
         self.assertEqual(result["body"], {"2026-10-21": {"weight_kg": 115.8, "body_fat_pct": 35.8}})
-        self.assertEqual(result["unused_metrics"], ["heart_rate", "sleep_analysis"])
+        self.assertEqual(result["unused_metrics"], ["heart_rate"])
+        self.assertEqual(result["sleep"]["2026-10-21"]["total_h"], 7.1)
         self.assertEqual(result["skipped"], 0)
+
+
+class SleepTests(unittest.TestCase):
+    def test_nights_are_filed_under_the_morning_and_naps_add_up(self):
+        result = normalize_health_payload({"data": {"metrics": [{"name": "sleep_analysis", "units": "hr", "data": [
+            {"date": "2026-10-22 00:00:00 +0300", "totalSleep": 6.12, "deep": 0.98, "core": 3.34, "rem": 1.79, "awake": 0.17,
+             "sleepStart": "2026-10-22 00:51:07 +0300", "sleepEnd": "2026-10-22 07:08:05 +0300"},
+            {"date": "2026-10-22 00:00:00 +0300", "totalSleep": 0.5, "core": 0.5,
+             "sleepStart": "2026-10-22 14:00:00 +0300", "sleepEnd": "2026-10-22 14:30:00 +0300"},
+            {"date": "2026-10-21 00:00:00 +0300", "asleep": 420, "sleepStart": "2026-10-20 23:30:00 +0300"},
+            {"date": "2026-10-20 00:00:00 +0300"},
+        ]}]}})
+        night = result["sleep"]["2026-10-22"]
+        self.assertEqual((night["total_h"], night["deep_h"], night["core_h"], night["rem_h"]), (6.62, 0.98, 3.84, 1.79))
+        self.assertEqual((night["start"], night["end"]), ("2026-10-22T00:51:07+03:00", "2026-10-22T14:30:00+03:00"))
+        self.assertNotIn("2026-10-21", result["sleep"])  # 420 hours is not a night
+        self.assertEqual(result["skipped"], 2)
+        self.assertIn("sleep_analysis: use aggregation Days so each night arrives as one entry", result["skipped_reasons"])
+
+    def test_minutes_are_converted(self):
+        result = normalize_health_payload({"data": {"metrics": [{"name": "sleep_analysis", "units": "min", "data": [
+            {"date": "2026-10-22 00:00:00 +0300", "totalSleep": 390}]}]}})
+        self.assertEqual(result["sleep"]["2026-10-22"]["total_h"], 6.5)

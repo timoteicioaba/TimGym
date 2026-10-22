@@ -119,6 +119,19 @@ CREATE TABLE IF NOT EXISTS health_daily (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, day, metric)
 );
+CREATE TABLE IF NOT EXISTS health_sleep (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,  -- the morning the night ended
+    total_h REAL NOT NULL,
+    deep_h REAL,
+    core_h REAL,
+    rem_h REAL,
+    awake_h REAL,
+    sleep_start TEXT,
+    sleep_end TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, day)
+);
 CREATE TABLE IF NOT EXISTS health_imports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -383,13 +396,16 @@ def top_set(sets):
     return max(weighted, key=lambda one: (one["weight_kg"], one["reps"]))
 
 
-def gym_sessions(db, user_id, since=None, limit=None):
+def gym_sessions(db, user_id, since=None, limit=None, until=None):
     """Logged gym workouts grouped into sessions, newest first."""
     query = "SELECT * FROM workouts WHERE user_id = ?"
     params = [user_id]
     if since:
         query += " AND workout_date >= ?"
         params.append(since.isoformat())
+    if until:
+        query += " AND workout_date <= ?"
+        params.append(until.isoformat())
     query += " ORDER BY workout_date DESC, id DESC"
     sessions = {}
     for row in db.execute(query, params):
@@ -456,12 +472,15 @@ def link_health_to_gym(gym, health):
     return unmatched
 
 
-def health_workouts(db, user_id, since=None, limit=None):
+def health_workouts(db, user_id, since=None, limit=None, until=None):
     query = "SELECT * FROM health_workouts WHERE user_id = ?"
     params = [user_id]
     if since:
         query += " AND workout_date >= ?"
         params.append(since.isoformat())
+    if until:
+        query += " AND workout_date <= ?"
+        params.append(until.isoformat())
     query += " ORDER BY started_at DESC"
     if limit:
         query += f" LIMIT {int(limit)}"
@@ -515,109 +534,150 @@ def body_weight_summary(db, user_id):
 @app.route("/")
 @login_required
 def index():
+    """One day at a glance: workout, nutrition, and sleep, then body and recent lifts."""
     db = get_db()
     user_id = g.user["id"]
     today = local_today()
-    today_iso = today.isoformat()
-    monday = today - timedelta(days=today.weekday())
+    try:
+        day = min(date.fromisoformat(request.args.get("day", "")), today)
+    except ValueError:
+        day = today
+    day_iso = day.isoformat()
+    monday = day - timedelta(days=day.weekday())
+    sunday = monday + timedelta(days=6)
 
-    # Workouts
-    week_gym = gym_sessions(db, user_id, since=monday)
-    week_health = health_workouts(db, user_id, since=monday)
+    # Week strip for the selected day's week; each day links to its own view.
+    week_gym = gym_sessions(db, user_id, since=monday, until=sunday)
+    week_health = health_workouts(db, user_id, since=monday, until=sunday)
     week_other = link_health_to_gym(week_gym, week_health)
-    # Strength days are gym logs plus Apple Health strength workouts not logged yet;
-    # a matched workout is the same session, not extra activity.
-    gym_days = {entry["date"] for entry in week_gym} | {
+    strength_days = {entry["date"] for entry in week_gym} | {
         entry["date"] for entry in week_other if is_strength_activity(entry["activity"])}
-    health_days = {entry["date"] for entry in week_other if not is_strength_activity(entry["activity"])}
+    other_days = {entry["date"] for entry in week_other if not is_strength_activity(entry["activity"])}
     week = []
     for offset in range(7):
-        day = monday + timedelta(days=offset)
-        iso = day.isoformat()
+        current = monday + timedelta(days=offset)
+        iso = current.isoformat()
         week.append({
-            "label": day.strftime("%a")[0], "day": day.day, "is_today": day == today, "future": day > today,
-            "gym": iso in gym_days, "health": iso in health_days,
+            "iso": iso, "label": current.strftime("%a")[0], "day": current.day,
+            "is_today": current == today, "selected": current == day, "future": current > today,
+            "gym": iso in strength_days, "health": iso in other_days,
         })
-    # Strength sessions Apple Health recorded today that have no exercises logged yet.
-    unlogged_today = [w for w in week_other if w["date"] == today_iso and is_strength_activity(w["activity"])]
+    week_minutes = round(sum(entry["duration_s"] or 0 for entry in week_health) / 60)
 
-    recent_gym = gym_sessions(db, user_id, limit=4)
-    # Enough Apple Health workouts to cover the matches for those logs and the latest activity.
-    recent_health = health_workouts(db, user_id, limit=12)
-    timeline = recent_gym + link_health_to_gym(recent_gym, recent_health)
-    timeline.sort(key=lambda entry: (entry["date"], entry.get("started_at") or (entry.get("health") or {}).get("started_at") or ""), reverse=True)
+    # Workout for the day: gym logs (merged with their Apple Health session) and other activity.
+    day_gym = [entry for entry in week_gym if entry["date"] == day_iso]
+    day_other = [entry for entry in week_other if entry["date"] == day_iso]
+    sessions = sorted(
+        day_gym + day_other,
+        key=lambda entry: entry.get("started_at") or (entry.get("health") or {}).get("started_at") or "",
+    )
 
-    # Nutrition and energy
-    last7 = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
+    # Daily totals for the day and the six before it (for the small charts).
+    window = [day - timedelta(days=offset) for offset in range(6, -1, -1)]
     daily = {
         (row["day"], row["metric"]): row["value"]
-        for row in db.execute("SELECT day, metric, value FROM health_daily WHERE user_id = ? AND day >= ?", (user_id, last7[0].isoformat()))
+        for row in db.execute(
+            "SELECT day, metric, value FROM health_daily WHERE user_id = ? AND day BETWEEN ? AND ?",
+            (user_id, window[0].isoformat(), day_iso),
+        )
     }
-    today_values = {metric: value for (day, metric), value in daily.items() if day == today_iso}
-    if "active_kcal" not in today_values:
+    activity = {"active_kcal": daily.get((day_iso, "active_kcal")), "steps": daily.get((day_iso, "steps"))}
+    if activity["active_kcal"] is None:
         # Without a daily total, the day's workouts give a lower bound for energy burned.
-        workout_kcal = sum(w["active_kcal"] or 0 for w in week_health if w["date"] == today_iso)
-        if workout_kcal:
-            today_values["active_kcal"] = workout_kcal
-    has_nutrition = db.execute(
-        "SELECT EXISTS(SELECT 1 FROM health_daily WHERE user_id = ? AND metric IN ('kcal_in', 'protein_g', 'carbs_g', 'fat_g'))", (user_id,)
+        activity["active_kcal"] = sum(w["active_kcal"] or 0 for w in week_health if w["date"] == day_iso) or None
+
+    food = {metric: daily.get((day_iso, metric)) for metric in NUTRITION_METRICS}
+    eaten_days = [daily[(current.isoformat(), "kcal_in")] for current in window if (current.isoformat(), "kcal_in") in daily]
+    average_eaten = round(sum(eaten_days) / len(eaten_days)) if eaten_days else None
+    macros = macro_breakdown(food)
+    eaten = food["kcal_in"] or (macros["kcal"] if macros else None)
+    has_nutrition = any(metric in NUTRITION_METRICS for _day, metric in daily) or db.execute(
+        "SELECT EXISTS(SELECT 1 FROM health_daily WHERE user_id = ? AND metric = 'kcal_in')", (user_id,)
     ).fetchone()[0] == 1
 
-    def food(iso):
-        values = {metric: daily.get((iso, metric)) for metric in NUTRITION_METRICS}
-        return values if any(value is not None for value in values.values()) else None
+    # Sleep: the night that ended on the selected morning, and the six before it.
+    nights = {
+        row["day"]: dict(row)
+        for row in db.execute(
+            "SELECT * FROM health_sleep WHERE user_id = ? AND day BETWEEN ? AND ?",
+            (user_id, window[0].isoformat(), day_iso),
+        )
+    }
+    night = nights.get(day_iso)
+    if night:
+        stages = [("deep", "Deep"), ("core", "Core"), ("rem", "REM"), ("awake", "Awake")]
+        night["stages"] = [
+            {"key": key, "label": label, "hours": night[f"{key}_h"]} for key, label in stages if night[f"{key}_h"]
+        ]
+        span = sum(stage["hours"] for stage in night["stages"]) or 1
+        for stage in night["stages"]:
+            stage["share"] = round(100 * stage["hours"] / span, 1)
+    peak_sleep = max((n["total_h"] for n in nights.values()), default=0)
+    sleep_week = [{
+        "label": current.strftime("%a")[0], "selected": current == day,
+        "hours": nights.get(current.isoformat(), {}).get("total_h"),
+        "height": round(100 * nights[current.isoformat()]["total_h"] / max(peak_sleep, 8)) if current.isoformat() in nights else 0,
+    } for current in window]
+    has_sleep = bool(nights) or db.execute(
+        "SELECT EXISTS(SELECT 1 FROM health_sleep WHERE user_id = ?)", (user_id,)
+    ).fetchone()[0] == 1
 
-    # Show today's food, or the latest day in the past week that has some, so the card is never blank.
-    food_day = next((day for day in reversed(last7) if food(day.isoformat())), None)
-    food_values = food(food_day.isoformat()) if food_day else None
-    macros = macro_breakdown(food_values) if food_values else None
-
-    intake_days = []
-    for day in last7:
-        values = food(day.isoformat()) or {}
-        split = macro_breakdown(values) if values else None
-        eaten = values.get("kcal_in") or (split["kcal"] if split else None)
-        intake_days.append({"label": day.strftime("%a")[0], "is_today": day == today, "eaten": eaten, "split": split})
-    peak = max((item["eaten"] or 0 for item in intake_days), default=0)
-    for item in intake_days:
-        item["height"] = round(100 * (item["eaten"] or 0) / peak) if peak else 0
-    logged = [food(day.isoformat()) for day in last7 if food(day.isoformat())]
-
-    def average(metric):
-        values = [values[metric] for values in logged if values.get(metric) is not None]
-        return round(sum(values) / len(values)) if values else None
-
-    week_average = {metric: average(metric) for metric in NUTRITION_METRICS} if logged else None
-
-    # Body
+    # Body as of the selected day.
     body_rows = db.execute(
-        "SELECT measured_on, weight_kg, body_fat_pct, waist_cm, source FROM measurements WHERE user_id = ? ORDER BY measured_on DESC, id DESC LIMIT 60",
-        (user_id,),
+        "SELECT measured_on, weight_kg, body_fat_pct, waist_cm, source FROM measurements WHERE user_id = ? AND measured_on <= ? ORDER BY measured_on DESC, id DESC LIMIT 60",
+        (user_id, day_iso),
     ).fetchall()
     body = None
     if body_rows:
         latest = body_rows[0]
         previous = next((row for row in body_rows[1:] if row["measured_on"] != latest["measured_on"]), None)
-        cutoff = (today - timedelta(days=30)).isoformat()
-        recent_weights = [(row["measured_on"], row["weight_kg"]) for row in reversed(body_rows) if row["measured_on"] >= cutoff]
+        cutoff = (day - timedelta(days=30)).isoformat()
         body = {
             "date": latest["measured_on"], "weight": latest["weight_kg"], "source": latest["source"],
             "change": latest["weight_kg"] - previous["weight_kg"] if previous else None,
             "body_fat": next((row["body_fat_pct"] for row in body_rows if row["body_fat_pct"] is not None), None),
-            "waist": next((row["waist_cm"] for row in body_rows if row["waist_cm"] is not None), None),
-            "sparkline": sparkline(recent_weights),
+            "sparkline": sparkline([(row["measured_on"], row["weight_kg"]) for row in reversed(body_rows) if row["measured_on"] >= cutoff]),
         }
 
     return render_template(
-        "overview.html", tab="home", today=today, week=week, unlogged_today=unlogged_today,
-        week_days=len(gym_days | health_days), week_session_count=len(week_gym) + len(week_other),
-        week_minutes=round(sum(entry["duration_s"] or 0 for entry in week_health) / 60),
-        week_volume=sum(entry["volume"] for entry in week_gym), week_sets=sum(entry["sets"] for entry in week_gym),
-        timeline=timeline[:4], exercises=recent_exercises(db, user_id, limit=4),
-        nutrition=today_values, has_nutrition=has_nutrition, intake_days=intake_days,
-        food_day=food_day, food=food_values, macros=macros, week_average=week_average, logged_food_days=len(logged),
-        body=body,
+        "overview.html", tab="home", today=today, day=day, week=week,
+        previous_day=(day - timedelta(days=1)).isoformat(), next_day=(day + timedelta(days=1)).isoformat() if day < today else None,
+        week_days=len(strength_days | other_days), week_workout_seconds=week_minutes * 60,
+        average_eaten=average_eaten,
+        sessions=sessions, activity=activity,
+        eaten=eaten, food=food, macros=macros, has_nutrition=has_nutrition,
+        night=night, sleep_week=sleep_week, has_sleep=has_sleep,
+        body=body, exercises=recent_exercises(db, user_id, limit=4),
     )
+
+
+# Apple Health's workout names are long for a phone row.
+SHORT_ACTIVITY_NAMES = {
+    "traditional strength training": "Strength training",
+    "functional strength training": "Functional strength",
+    "high intensity interval training": "HIIT",
+}
+
+
+@app.template_filter("short_activity")
+def short_activity(name):
+    return SHORT_ACTIVITY_NAMES.get((name or "").casefold(), name)
+
+
+@app.template_filter("hm")
+def format_hm(value):
+    """Compact duration from hours: 0.98 -> "59m", 3.34 -> "3h 20m"."""
+    minutes = round((value or 0) * 60)
+    return f"{minutes // 60}h {minutes % 60:02d}m" if minutes >= 60 else f"{minutes}m"
+
+
+@app.template_filter("hours")
+def format_hours(value):
+    """6.12 -> "6 h 07 min"."""
+    if not value:
+        return "—"
+    minutes = round(value * 60)
+    return f"{minutes // 60} h {minutes % 60:02d} min"
 
 
 NUTRITION_METRICS = ("kcal_in", "protein_g", "carbs_g", "fat_g")
@@ -722,14 +782,50 @@ def progress():
         polyline = ""
     latest_weight, weight_change = body_weight_summary(db, user_id)
     activities = health_workouts(db, user_id, limit=20)
+    sleep_chart = sleep_history(db, user_id, local_today(), days=30)
     if activities:
         link_health_to_gym(gym_sessions(db, user_id, since=date.fromisoformat(activities[-1]["date"])), activities)
     return render_template(
         "progress.html", tab="progress", lift_charts=lift_progression(db, user_id),
         measurements=measurements, chart_points=chart_points, chart_min=chart_min, chart_max=chart_max,
         chart_polyline=polyline, latest_weight=latest_weight, weight_change=weight_change,
-        activities=activities,
+        activities=activities, sleep_chart=sleep_chart,
     )
+
+
+def sleep_history(db, user_id, until, days=30):
+    """Nightly sleep for a stacked stage chart, with averages; None without data."""
+    since = until - timedelta(days=days - 1)
+    rows = {
+        row["day"]: row
+        for row in db.execute(
+            "SELECT * FROM health_sleep WHERE user_id = ? AND day BETWEEN ? AND ?", (user_id, since.isoformat(), until.isoformat())
+        )
+    }
+    if not rows:
+        return None
+    scale = max(9.0, max(row["total_h"] for row in rows.values()))
+    nights = []
+    for offset in range(days):
+        current = since + timedelta(days=offset)
+        row = rows.get(current.isoformat())
+        segments = []
+        if row:
+            staged = sum(row[f"{key}_h"] or 0 for key in ("deep", "core", "rem"))
+            parts = [(key, row[f"{key}_h"]) for key in ("deep", "core", "rem") if row[f"{key}_h"]] if staged else [("core", row["total_h"])]
+            segments = [{"key": key, "height": round(100 * hours / scale, 1)} for key, hours in parts]
+        nights.append({
+            "date": current.isoformat(), "total": row["total_h"] if row else None, "segments": segments,
+            # Label every 7th night counting back from the latest, so labels never collide.
+            "label": current.strftime("%d") if (days - 1 - offset) % 7 == 0 else "",
+        })
+    def average(key):
+        values = [row[key] for row in rows.values() if row[key] is not None]
+        return sum(values) / len(values) if values else None
+    return {
+        "nights": nights, "count": len(rows), "scale": scale,
+        "average_total": average("total_h"), "average_deep": average("deep_h"), "average_rem": average("rem_h"),
+    }
 
 
 def lift_progression(db, user_id):
@@ -815,7 +911,7 @@ def render_settings(new_api_key=None):
     for row in db.execute("SELECT received_at, summary_json FROM health_imports WHERE user_id = ? ORDER BY id DESC LIMIT 5", (user_id,)):
         item = dict(json.loads(row["summary_json"]), received_at=row["received_at"])
         groups = {metric_group(name) for name in item.get("metrics_received", [])}
-        item["groups"] = [label for key, label in (("activity", "Activity"), ("nutrition", "Nutrition"), ("body", "Body")) if key in groups]
+        item["groups"] = [label for key, label in (("activity", "Activity"), ("nutrition", "Nutrition"), ("sleep", "Sleep"), ("body", "Body")) if key in groups]
         imports.append(item)
     return render_template(
         "settings.html", tab="settings", new_api_key=new_api_key, has_key=has_key,
@@ -1100,9 +1196,19 @@ def api_import_health():
         [(user_id, day, metric, value) for (day, metric), value in imported["daily"].items()],
     )
     body_saved = save_health_measurements(db, user_id, imported["body"])
+    # Each export carries whole nights, so a re-sent night replaces the stored one.
+    db.executemany(
+        """INSERT INTO health_sleep (user_id, day, total_h, deep_h, core_h, rem_h, awake_h, sleep_start, sleep_end)
+           VALUES (:user_id, :day, :total_h, :deep_h, :core_h, :rem_h, :awake_h, :start, :end)
+           ON CONFLICT (user_id, day) DO UPDATE SET total_h = excluded.total_h, deep_h = excluded.deep_h,
+             core_h = excluded.core_h, rem_h = excluded.rem_h, awake_h = excluded.awake_h,
+             sleep_start = excluded.sleep_start, sleep_end = excluded.sleep_end, updated_at = CURRENT_TIMESTAMP""",
+        [dict(night, user_id=user_id) for night in imported["sleep"].values()],
+    )
     summary = {
         "workouts_received": imported["received"]["workouts"],
         "measurements_saved": body_saved,
+        "nights_saved": len(imported["sleep"]),
         "workouts_saved": len(imported["workouts"]),
         "days_saved": len({day for day, _metric in imported["daily"]}),
         "metrics_received": imported["received"]["metrics"],

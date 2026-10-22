@@ -86,7 +86,9 @@ class HealthEndpointTests(unittest.TestCase):
         ]}})
         self.login()
         page = self.client.get("/").get_data(as_text=True)
-        self.assertEqual(page.count("Log your exercises?"), 1)  # the ride is not a gym session
+        self.assertEqual(page.count(">Log exercises<"), 1)  # the ride is not a gym session
+        # At least the 50 min lift + 30 min ride (other tests may add workouts this week).
+        self.assertRegex(page, r"[1-9] h \d\d min of workouts")
         self.assertIn("?session=", page)
         session_id = page.split("?session=")[1].split('"')[0]
         self.assertIn("Logging exercises for Traditional Strength Training", self.client.get(f"/log?session={session_id}").get_data(as_text=True))
@@ -95,8 +97,8 @@ class HealthEndpointTests(unittest.TestCase):
             "date": today, "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight_kg": 100}]}]})
         self.assertEqual(response.status_code, 201)
         page = self.client.get("/").get_data(as_text=True)
-        self.assertNotIn("Log your exercises?", page)
-        self.assertIn("Traditional Strength Training", page)  # now shown as one merged session
+        self.assertNotIn(">Log exercises<", page)
+        self.assertIn("<strong>Strength training</strong>", page)  # now shown as one merged session
 
     def test_today_shows_nutrition_and_body(self):
         today = date.today().isoformat()
@@ -111,7 +113,7 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertIn("160<small> g</small>", page)
         self.assertIn("81.4", page)
 
-    def test_nutrition_falls_back_to_the_latest_day_with_food(self):
+    def test_a_chosen_day_shows_its_own_food_and_sleep(self):
         db = timgym.connect_db()
         db.execute("DELETE FROM health_daily")
         db.commit()
@@ -123,14 +125,30 @@ class HealthEndpointTests(unittest.TestCase):
             {"name": "carbohydrates", "units": "g", "data": [{"date": f"{yesterday} 00:00:00 +0000", "qty": 200}]},
             {"name": "total_fat", "units": "g", "data": [{"date": f"{yesterday} 00:00:00 +0000", "qty": 80}]},
         ]}})
+        self.post({"data": {"metrics": [{"name": "sleep_analysis", "units": "hr", "data": [{
+            "date": f"{yesterday} 00:00:00 +0000", "totalSleep": 6.5, "deep": 1, "core": 3.5, "rem": 2, "awake": 0.25,
+            "sleepStart": f"{yesterday} 00:30:00 +0000", "sleepEnd": f"{yesterday} 07:15:00 +0000"}]}]}})
         self.login()
         page = self.client.get("/").get_data(as_text=True)
-        self.assertIn("No food logged today yet", page)
+        self.assertIn("No food logged yet", page)
+        self.assertIn("No sleep recorded for this night", page)
+
+        page = self.client.get(f"/?day={yesterday}").get_data(as_text=True)
+        self.assertIn("Yesterday</h1>", page)
         self.assertIn("2,000", page)              # 8368 kJ
         self.assertIn("150<small> g</small>", page)
-        self.assertIn('title="600 kcal">28% of calories', page)  # protein: 150 g × 4 = 600 of 2,120 kcal
+        self.assertIn("width:28%", page)          # protein: 150 g × 4 = 600 of 2,120 kcal
+        self.assertIn("6 h 30 min", page)
+        self.assertIn("00:30–07:15", page)
+        self.assertIn("Deep 1h 00m", page)
         settings = self.client.get("/settings").get_data(as_text=True)
         self.assertIn('class="chip-small on">Nutrition', settings)
+        self.assertIn('class="chip-small on">Sleep', settings)
+
+    def test_future_or_invalid_days_show_today(self):
+        self.login()
+        for value in ("2999-01-01", "not-a-date"):
+            self.assertIn("Today</h1>", self.client.get(f"/?day={value}").get_data(as_text=True))
 
     def test_json_without_content_type(self):
         self.assertEqual(self.post(EXPORT, headers={"Content-Type": None}).status_code, 200)
