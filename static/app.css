@@ -186,6 +186,6 @@ input.needs-value{border-color:var(--warn);background:#1a1609}
 /* Installed app (home screen): the page starts below an opaque status bar; keep the
    header solid with a little room above the title. */
 @media (display-mode: standalone){
-  .app-bar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;padding-top:calc(var(--safe-top) + 14px);border-bottom-color:#161e1a}
+  .app-bar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;padding-top:calc(var(--safe-top) + 40px);border-bottom-color:#161e1a}
   .login-shell{padding-top:calc(var(--safe-top) + 10vh)}
 }
