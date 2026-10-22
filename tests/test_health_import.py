@@ -93,8 +93,12 @@ class SimpleFormatTests(unittest.TestCase):
         workout = {"id": "X", "name": "Run", "start": "2026-10-20 08:00:00 +0000"}
         self.assertEqual(len(normalize_health_payload({"workouts": [workout, workout]})["workouts"]), 1)
 
+    def test_unselected_sections_may_be_null(self):
+        result = normalize_health_payload({"data": {"workouts": None, "metrics": None}})
+        self.assertEqual((result["workouts"], result["daily"]), ([], {}))
+
     def test_rejects_bad_shapes(self):
-        for payload in ([], {"workouts": {}}, {"workouts": [{}] * 5001}):
+        for payload in ([], {"workouts": {}}, {"workouts": [{}] * 20001}):
             with self.assertRaises(ValueError):
                 normalize_health_payload(payload)
 

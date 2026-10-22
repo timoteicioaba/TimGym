@@ -16,7 +16,8 @@ _KJ_PER_KCAL = 4.184
 _KM_PER_UNIT = {"km": 1.0, "m": 0.001, "mi": 1.609344, "yd": 0.0009144, "ft": 0.0003048}
 # Health Auto Export metric name -> stored metric name
 _DAILY_METRICS = {"active_energy": "active_kcal", "step_count": "steps"}
-MAX_ENTRIES = 5000
+MAX_ENTRIES = 20000
+MAX_SAMPLES_PER_METRIC = 200000  # a year of minute-level samples is still under this
 
 
 def _quantity(value):
@@ -128,9 +129,10 @@ def normalize_health_payload(payload):
     if not isinstance(payload, dict):
         raise ValueError("Send a JSON object.")
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-    raw_workouts = data.get("workouts", [])
-    raw_metrics = data.get("metrics", [])
-    raw_daily = data.get("daily", [])
+    # Exporters send null for sections that were not selected.
+    raw_workouts = data.get("workouts", []) if data.get("workouts") is not None else []
+    raw_metrics = data.get("metrics", []) if data.get("metrics") is not None else []
+    raw_daily = data.get("daily", []) if data.get("daily") is not None else []
     if not all(isinstance(part, list) for part in (raw_workouts, raw_metrics, raw_daily)):
         raise ValueError("workouts, metrics, and daily must be lists.")
     if len(raw_workouts) > MAX_ENTRIES or len(raw_daily) > MAX_ENTRIES:
@@ -152,7 +154,7 @@ def normalize_health_payload(payload):
         stored = _DAILY_METRICS[metric["name"]]
         units = metric.get("units")
         samples = metric.get("data") or []
-        if not isinstance(samples, list) or len(samples) > MAX_ENTRIES:
+        if not isinstance(samples, list) or len(samples) > MAX_SAMPLES_PER_METRIC:
             skipped += 1
             continue
         for sample in samples:

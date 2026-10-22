@@ -28,7 +28,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=True,
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
-    MAX_CONTENT_LENGTH=10 * 1024 * 1024,  # Apple Health exports can be large
+    MAX_CONTENT_LENGTH=50 * 1024 * 1024,  # first Apple Health syncs can cover months of data
 )
 
 
@@ -218,19 +218,32 @@ def number(value, label, maximum, minimum=0):
     return result
 
 
+def api_log_failure(status, reason):
+    """Record why an API request was refused, for `docker compose logs`."""
+    app.logger.warning(
+        "API %s %s refused (%s): %s; content-type=%r, length=%s, user-agent=%r",
+        request.method, request.path, status, reason, request.content_type,
+        request.content_length, request.user_agent.string[:80],
+    )
+
+
 def api_key_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return {"error": "Provide your TimGym API key as a Bearer token."}, 401
-        digest = hashlib.sha256(auth[7:].strip().encode("utf-8")).hexdigest()
+        auth = request.headers.get("Authorization", "").strip()
+        # Accept "Bearer <key>" in any case, or the bare key, since apps vary in how they set headers.
+        token = auth[7:].strip() if auth[:7].lower() == "bearer " else auth
+        if not token:
+            api_log_failure(401, "no Authorization header")
+            return {"error": "Provide your TimGym API key in the Authorization header as: Bearer YOUR_KEY"}, 401
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
         user = get_db().execute(
             "SELECT users.id, users.username FROM api_tokens JOIN users ON users.id = api_tokens.user_id WHERE api_tokens.token_hash = ?",
             (digest,),
         ).fetchone()
         if user is None:
-            return {"error": "Invalid API key."}, 401
+            api_log_failure(401, "unknown API key")
+            return {"error": "Invalid API key. Generate a new one in TimGym Settings and update the app."}, 401
         g.api_user = user
         return view(*args, **kwargs)
     return wrapped
@@ -849,8 +862,13 @@ def api_add_workout():
 @api_key_required
 def api_import_health():
     try:
-        imported = normalize_health_payload(request.get_json(silent=True))
+        # Some exporters omit the JSON content type, so parse the body regardless.
+        payload = request.get_json(force=True, silent=True)
+        if payload is None:
+            raise ValueError("The body is not valid JSON. Choose the JSON export format.")
+        imported = normalize_health_payload(payload)
     except ValueError as exc:
+        api_log_failure(400, str(exc))
         return {"error": str(exc)}, 400
     user_id = g.api_user["id"]
     db = get_db()
@@ -876,6 +894,28 @@ def api_import_health():
         "days_saved": len({day for day, _metric in imported["daily"]}),
         "skipped": imported["skipped"],
     }
+
+
+@app.errorhandler(413)
+def payload_too_large(_error):
+    if request.path.startswith("/api/"):
+        api_log_failure(413, "body larger than the upload limit")
+        return {"error": "This export is too large (over 50 MB). Export a shorter date range, then sync the rest in parts."}, 413
+    return "Upload too large.", 413
+
+
+@app.errorhandler(405)
+def method_not_allowed(_error):
+    if request.path.startswith("/api/"):
+        return {"error": f"{request.method} is not supported here. Send a POST request with JSON."}, 405
+    return "Method not allowed.", 405
+
+
+@app.errorhandler(500)
+def server_error(_error):
+    if request.path.startswith("/api/"):
+        return {"error": "TimGym hit an unexpected error while saving. Check the server logs."}, 500
+    return "Something went wrong.", 500
 
 
 @app.get("/api/me")

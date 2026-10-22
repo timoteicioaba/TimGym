@@ -16,4 +16,5 @@ COPY templates ./templates
 COPY static ./static
 USER appuser
 EXPOSE 8000
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "app:app"]
+# A longer timeout lets large Apple Health uploads finish over slow mobile connections.
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "app:app"]

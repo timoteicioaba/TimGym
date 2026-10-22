@@ -74,7 +74,9 @@ Websites can't read Apple Health directly, so an iPhone app sends the data to Ti
    - Header: `Authorization: Bearer YOUR_TIMGYM_KEY`
    - Format **JSON**, export version **2**, aggregation **Days**
    - **Workouts**, plus the metrics **Active Energy** and **Step Count**
-3. Run it once manually. **Settings → Apple Health** shows how many workouts and days arrived.
+3. Run it once manually with a short range, such as the last 7 days. **Settings → Apple Health** shows how many workouts and days arrived. Uploads are limited to 50 MB, so sync long histories in parts.
+
+If Health Auto Export only reports “error”, run `docker compose logs --tail=20 timgym`. Every refused import is logged with its reason (for example an unknown API key, a body that is not JSON, or an upload over the limit). The JSON response also carries the reason in `error`.
 
 Workouts are matched by their Apple Health ID and daily totals replace earlier values, so syncing the same days again never double-counts. Energy in kJ and distances in miles are converted. The endpoint also accepts a simpler JSON shape (see `/openapi.yaml`) for your own Shortcut or script.
 

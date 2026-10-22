@@ -26,8 +26,10 @@
       <li>Add a header <code>Authorization</code> with the value <code>Bearer YOUR_KEY</code>.</li>
       <li>Format <strong>JSON</strong>, export version <strong>2</strong>, aggregation <strong>Days</strong>.</li>
       <li>Include <strong>Workouts</strong>, plus the metrics <strong>Active Energy</strong> and <strong>Step Count</strong>.</li>
-      <li>Pick a sync interval, then run it once manually. The counts above update when TimGym receives data.</li>
+      <li>For the first manual export, pick a short range such as the last 7 days. Very long ranges can exceed the 50 MB upload limit.</li>
+      <li>Pick a sync interval. The counts above update when TimGym receives data.</li>
     </ol>
+    <p class="muted">If the app only says “error”, run <code>docker compose logs --tail=20 timgym</code> on the server. TimGym logs why it refused each import.</p>
     <p class="muted">Re-sending the same days is safe: workouts are matched by their Health ID and daily totals are replaced, never doubled.</p>
   </details>
 </section>
