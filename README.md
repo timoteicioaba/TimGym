@@ -30,6 +30,15 @@ To list accounts:
 docker compose exec timgym python app.py list-users
 ```
 
+To delete the data an account entered outside Apple Health (gym workouts logged in TimGym, including through the API, and body check-ins entered by hand), first back up the database, then run:
+
+```sh
+docker compose cp timgym:/data/timgym.db ./timgym-backup.db
+docker compose exec timgym python app.py delete-manual-data <username>
+```
+
+It lists what will be deleted and asks you to type the username to confirm. Apple Health workouts, activity, nutrition, imported check-ins, the account, and its API key are kept.
+
 ## Log workouts with the local parser
 
 Type a workout on the dashboard the way you would in a notes app and choose **Parse workout** (or press Ctrl/⌘+Enter). TimGym understands common gym shorthand:

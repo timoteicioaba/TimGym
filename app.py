@@ -1163,6 +1163,33 @@ def create_user(username, password):
         db.close()
 
 
+def manual_data_counts(db, user_id):
+    """What delete-manual-data would remove: everything not imported from Apple Health."""
+    return {
+        "gym exercises logged": db.execute("SELECT COUNT(*) FROM workouts WHERE user_id = ?", (user_id,)).fetchone()[0],
+        "body check-ins entered by hand": db.execute(
+            "SELECT COUNT(*) FROM measurements WHERE user_id = ? AND source IS NOT 'apple_health'", (user_id,)
+        ).fetchone()[0],
+    }
+
+
+def delete_manual_data(username):
+    """Delete a user's gym logs and hand-entered check-ins; keep Apple Health data,
+    the account, and the API key. Returns the counts removed."""
+    db = connect_db()
+    try:
+        user = db.execute("SELECT id FROM users WHERE username = ? COLLATE NOCASE", (username,)).fetchone()
+        if user is None:
+            raise ValueError(f"No account named '{username}'.")
+        counts = manual_data_counts(db, user["id"])
+        db.execute("DELETE FROM workouts WHERE user_id = ?", (user["id"],))
+        db.execute("DELETE FROM measurements WHERE user_id = ? AND source IS NOT 'apple_health'", (user["id"],))
+        db.commit()
+        return counts
+    finally:
+        db.close()
+
+
 def cli():
     if len(sys.argv) == 3 and sys.argv[1] == "create-user":
         username = sys.argv[2].strip()
@@ -1179,7 +1206,28 @@ def cli():
             print(f'{row["username"]}\t{row["created_at"]}')
         db.close()
         return
-    raise SystemExit("Usage: python app.py create-user <username> | list-users")
+    if len(sys.argv) == 3 and sys.argv[1] == "delete-manual-data":
+        username = sys.argv[2].strip()
+        db = connect_db()
+        user = db.execute("SELECT id, username FROM users WHERE username = ? COLLATE NOCASE", (username,)).fetchone()
+        if user is None:
+            db.close()
+            raise SystemExit(f"No account named '{username}'.")
+        counts = manual_data_counts(db, user["id"])
+        db.close()
+        print(f"This permanently deletes for '{user['username']}':")
+        for label, count in counts.items():
+            print(f"  {count} {label}")
+        print("Apple Health workouts, activity, nutrition, imported check-ins, the account, and the API key are kept.")
+        if not any(counts.values()):
+            print("Nothing to delete.")
+            return
+        if input(f"Type the username '{user['username']}' to confirm: ").strip() != user["username"]:
+            raise SystemExit("Cancelled; nothing was deleted.")
+        delete_manual_data(user["username"])
+        print("Deleted.")
+        return
+    raise SystemExit("Usage: python app.py create-user <username> | list-users | delete-manual-data <username>")
 
 
 if __name__ == "__main__":
