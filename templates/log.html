@@ -4,6 +4,7 @@
 {% block heading %}Log{% endblock %}
 {% block content %}
 <section class="card" id="workout-log">
+  {% if health_session %}<div class="session-banner"><span class="health-badge">Apple Health</span><span>Logging exercises for {{ health_session.activity }} · {{ health_session.workout_date|relative_day }} {{ health_session.started_at|clock }}{% if health_session.duration_s %} · {{ health_session.duration_s|duration }}{% endif %}</span></div>{% endif %}
   <label for="workout-note">YOUR WORKOUT</label>
   <textarea id="workout-note" maxlength="4000" autocapitalize="sentences" enterkeyhint="enter" placeholder="Squat 100kg 5,5,4&#10;Bench 60x8, 70x6, 80x5 felt strong&#10;Pull ups 3x10"></textarea>
   {% if known_exercises %}<div class="hint-chips" aria-label="Recent exercises">{% for name in known_exercises[:12] %}<button class="chip" type="button" data-insert="{{ name }}">{{ name }}</button>{% endfor %}</div>{% endif %}
@@ -37,6 +38,7 @@
 {% block scripts %}
 <script>
 const csrfToken = {{ csrf|tojson }};
+const sessionDate = {{ (health_session.workout_date if health_session else none)|tojson }};
 let pendingWorkout = null;
 const noteField = document.getElementById("workout-note");
 const status = document.getElementById("workout-ai-status");
@@ -187,6 +189,8 @@ async function interpretNote() {
       return;
     }
     pendingWorkout = result.workout;
+    // From the Apple Health prompt, the session's own date wins unless the note names a date.
+    if (sessionDate && pendingWorkout.date === {{ today|tojson }}) pendingWorkout.date = sessionDate;
     dateInput.value = pendingWorkout.date;
     renderPreview();
   } catch (error) {

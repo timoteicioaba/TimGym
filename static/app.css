@@ -149,3 +149,27 @@ input.needs-value{border-color:var(--warn);background:#1a1609}
 
 @media(min-width:760px){.app-shell{padding-top:16px}.tab-bar{left:50%;right:auto;bottom:16px;transform:translateX(-50%);width:440px;border:1px solid #28342d;border-radius:22px;padding-bottom:6px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Today sections */
+.subsection-title{margin:18px 4px 6px;font-size:.92rem;font-weight:700;color:#d4ddd6}
+.log-prompt{display:flex;align-items:center;gap:12px;padding:14px 15px;margin:4px 0 6px;border-radius:20px;background:linear-gradient(135deg,#25361a,#16200f);border:1px solid #4d6b2c;color:var(--text)}
+.log-prompt:active{filter:brightness(1.08)}
+.log-prompt .row-sub{color:#c6d6b7}
+.log-prompt-action{flex:0 0 auto;padding:9px 15px;border-radius:12px;background:var(--accent);color:#15200b;font-weight:750;font-size:.88rem}
+.energy-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.energy-row div{display:flex;flex-direction:column;gap:3px}
+.energy-row strong{font-size:1.45rem;letter-spacing:-.04em;line-height:1.15}
+.energy-row small{color:var(--muted);font-size:.72rem}
+.macro-bar{display:flex;height:10px;margin-top:16px;border-radius:999px;overflow:hidden;background:#1f2924}
+.macro-protein{background:#75c8ff}.macro-carbs{background:#c7f36a}.macro-fat{background:#ffb35c}
+.macro-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:9px;font-size:.8rem;color:var(--muted)}
+.macro-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.macro-legend strong{color:var(--text);font-weight:650;margin-left:2px}
+.bars.intake{margin-top:16px;height:104px}
+.bars.intake .bar-fill{background:linear-gradient(180deg,#d5f78b,#9fd447)}
+.body-head{display:flex;justify-content:space-between;gap:12px}
+.body-side{display:flex;flex-direction:column;gap:10px;text-align:right}
+.body-side strong{display:block;font-size:1.05rem;margin-top:2px}
+.sparkline{display:block;width:100%;height:56px;margin-top:12px}
+.sparkline polyline{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.session-banner{display:flex;align-items:center;gap:10px;padding:11px 13px;margin:0 0 12px;border-radius:14px;background:#1a2b38;color:#d9f0ff;font-size:.88rem}

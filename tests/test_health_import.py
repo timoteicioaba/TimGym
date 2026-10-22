@@ -147,3 +147,19 @@ class BodyMeasurementTests(unittest.TestCase):
         })
         self.assertEqual(result["daily"], {})
         self.assertIn("weight_body_mass: unusable reading 3", result["skipped_reasons"])
+
+
+class NutritionTests(unittest.TestCase):
+    def test_nutrition_metrics_under_either_spelling(self):
+        result = normalize_health_payload({"data": {"metrics": [
+            {"name": "dietary_energy", "units": "kJ", "data": [{"date": "2026-10-21 00:00:00 +0300", "qty": 8368}]},
+            {"name": "Protein", "units": "g", "data": [{"date": "2026-10-21 00:00:00 +0300", "qty": 150}]},
+            {"name": "carbohydrates", "units": "g", "data": [{"date": "2026-10-21 00:00:00 +0300", "qty": 210}]},
+            {"name": "Total Fat", "units": "g", "data": [{"date": "2026-10-21 00:00:00 +0300", "qty": 70}]},
+            {"name": "heart_rate", "units": "count/min", "data": []},
+        ]}})
+        self.assertEqual(result["daily"], {
+            ("2026-10-21", "kcal_in"): 2000.0, ("2026-10-21", "protein_g"): 150.0,
+            ("2026-10-21", "carbs_g"): 210.0, ("2026-10-21", "fat_g"): 70.0,
+        })
+        self.assertEqual(result["unused_metrics"], ["heart_rate"])

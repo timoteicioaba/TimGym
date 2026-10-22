@@ -1,4 +1,5 @@
 import hashlib
+from datetime import date
 import json
 import os
 import sys
@@ -71,6 +72,44 @@ class HealthEndpointTests(unittest.TestCase):
         rows = db.execute("SELECT weight_kg, source FROM measurements WHERE measured_on = '2026-09-01'").fetchall()
         self.assertEqual([tuple(row) for row in rows], [(80.9, None)])
         db.close()
+
+    def login(self):
+        with self.client.session_transaction() as session:
+            session["user_id"] = 1
+            session["_csrf"] = "token"
+
+    def test_today_prompts_to_log_an_unlogged_strength_session(self):
+        today = date.today().isoformat()
+        self.post({"data": {"workouts": [
+            {"id": "today-lift", "name": "Traditional Strength Training", "start": f"{today} 18:00:00 +0000", "duration": 3000},
+            {"id": "today-ride", "name": "Cycling", "start": f"{today} 07:00:00 +0000", "duration": 1800},
+        ]}})
+        self.login()
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertEqual(page.count("Log your exercises?"), 1)  # the ride is not a gym session
+        self.assertIn("?session=", page)
+        session_id = page.split("?session=")[1].split('"')[0]
+        self.assertIn("Logging exercises for Traditional Strength Training", self.client.get(f"/log?session={session_id}").get_data(as_text=True))
+
+        response = self.client.post("/workouts/save", headers={"X-CSRF-Token": "token"}, json={
+            "date": today, "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight_kg": 100}]}]})
+        self.assertEqual(response.status_code, 201)
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertNotIn("Log your exercises?", page)
+        self.assertIn("Traditional Strength Training", page)  # now shown as one merged session
+
+    def test_today_shows_nutrition_and_body(self):
+        today = date.today().isoformat()
+        self.post({"data": {"metrics": [
+            {"name": "dietary_energy", "units": "kcal", "data": [{"date": f"{today} 00:00:00 +0000", "qty": 2150}]},
+            {"name": "protein", "units": "g", "data": [{"date": f"{today} 00:00:00 +0000", "qty": 160}]},
+            {"name": "weight_body_mass", "units": "kg", "data": [{"date": f"{today} 07:00:00 +0000", "qty": 81.4}]},
+        ]}})
+        self.login()
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn("2,150", page)
+        self.assertIn("160 g", page)
+        self.assertIn("81.4", page)
 
     def test_json_without_content_type(self):
         self.assertEqual(self.post(EXPORT, headers={"Content-Type": None}).status_code, 200)

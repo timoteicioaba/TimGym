@@ -17,10 +17,24 @@ from datetime import date, datetime
 _KJ_PER_KCAL = 4.184
 _KM_PER_UNIT = {"km": 1.0, "m": 0.001, "mi": 1.609344, "yd": 0.0009144, "ft": 0.0003048}
 # Health Auto Export metric name -> stored metric name
-_DAILY_METRICS = {"active_energy": "active_kcal", "step_count": "steps"}
+# Daily totals: stored name -> accepted export names. The exporter's exact
+# identifiers for nutrition are not documented, so common spellings are accepted;
+# Settings lists any metric that arrives under a name not recognized here.
+_DAILY_ALIASES = {
+    "active_kcal": ("active_energy", "active_energy_burned"),
+    "steps": ("step_count", "steps"),
+    "kcal_in": ("dietary_energy", "dietary_energy_consumed", "energy_consumed", "dietary_calories", "calories_consumed"),
+    "protein_g": ("protein", "dietary_protein"),
+    "carbs_g": ("carbohydrates", "carbohydrate", "carbs", "dietary_carbohydrates", "total_carbohydrates"),
+    "fat_g": ("total_fat", "fat_total", "dietary_fat_total", "dietary_fat", "fat"),
+}
+_DAILY_METRICS = {alias: stored for stored, aliases in _DAILY_ALIASES.items() for alias in aliases}
+_ENERGY_METRICS = {"active_kcal", "kcal_in"}
+_DAILY_LIMITS = {"active_kcal": 20000, "kcal_in": 30000, "steps": 500000, "protein_g": 2000, "carbs_g": 3000, "fat_g": 2000}
 # Health Auto Export metric name -> (body measurement field, plausible range after conversion)
 _BODY_METRICS = {
     "weight_body_mass": ("weight_kg", 20, 400),
+    "body_mass": ("weight_kg", 20, 400),
     "body_fat_percentage": ("body_fat_pct", 2, 75),
     "waist_circumference": ("waist_cm", 30, 250),
 }
@@ -171,6 +185,18 @@ def _body_value(field, qty, units):
     return amount
 
 
+def _metric_key(name):
+    """"Dietary Energy" or "dietary-energy" -> "dietary_energy"."""
+    return re.sub(r"[^a-z0-9]+", "_", str(name or "").casefold()).strip("_")
+
+
+def _grams_or_count(quantity):
+    amount, units = _quantity(quantity)
+    if amount is not None and (units or "").lower() == "mg":
+        amount /= 1000
+    return amount
+
+
 def _day(value):
     text = str(value or "").strip()[:10]
     try:
@@ -208,7 +234,14 @@ def normalize_health_payload(payload):
 
     daily = {}
     body_samples = {}  # (day, field) -> [values]
+    unused = []
     for metric in raw_metrics:
+        if isinstance(metric, dict):
+            metric = dict(metric, name=_metric_key(metric.get("name")))
+        if isinstance(metric, dict) and metric["name"] not in _BODY_METRICS and metric["name"] not in _DAILY_METRICS:
+            if metric["name"] and metric["name"] not in unused:
+                unused.append(metric["name"])
+            continue
         if isinstance(metric, dict) and metric.get("name") in _BODY_METRICS:
             field, low, high = _BODY_METRICS[metric["name"]]
             samples = metric.get("data") or []
@@ -241,7 +274,7 @@ def normalize_health_payload(payload):
                 continue
             day = _day(sample.get("date"))
             quantity = {"qty": sample.get("qty"), "units": units}
-            value = _kcal(quantity) if stored == "active_kcal" else _quantity(quantity)[0]
+            value = _kcal(quantity) if stored in _ENERGY_METRICS else _grams_or_count(quantity)
             if day is None or value is None or value < 0:
                 skipped += 1
                 continue
@@ -263,8 +296,7 @@ def normalize_health_payload(payload):
                 daily[(day, stored)] = value
 
     for key, value in daily.items():
-        limit = 20000 if key[1] == "active_kcal" else 500000
-        daily[key] = round(min(value, limit), 1)
+        daily[key] = round(min(value, _DAILY_LIMITS[key[1]]), 1)
     # Several readings in a day (e.g. two weigh-ins) average out; they are not a total.
     body = {}
     for (day, field), values in body_samples.items():
@@ -274,4 +306,5 @@ def normalize_health_payload(payload):
         "workouts": list(workouts.values()), "daily": daily, "body": body,
         "skipped": skipped, "skipped_reasons": reasons,
         "received": {"workouts": len(raw_workouts), "metrics": [m.get("name") for m in raw_metrics if isinstance(m, dict)][:40]},
+        "unused_metrics": unused[:40],
     }

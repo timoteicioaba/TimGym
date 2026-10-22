@@ -321,6 +321,12 @@ def format_kg(value):
     return f"{value:g}" if value is not None else "—"
 
 
+@app.template_filter("clock")
+def clock(started_at):
+    """"2026-10-21T18:05:00+03:00" -> "18:05" (the time as recorded on the phone)."""
+    return str(started_at or "")[11:16]
+
+
 @app.template_filter("duration")
 def format_duration(seconds):
     if not seconds:
@@ -491,7 +497,10 @@ def index():
     db = get_db()
     user_id = g.user["id"]
     today = local_today()
+    today_iso = today.isoformat()
     monday = today - timedelta(days=today.weekday())
+
+    # Workouts
     week_gym = gym_sessions(db, user_id, since=monday)
     week_health = health_workouts(db, user_id, since=monday)
     week_other = link_health_to_gym(week_gym, week_health)
@@ -506,45 +515,89 @@ def index():
             "label": day.strftime("%a")[0], "day": day.day, "is_today": day == today, "future": day > today,
             "gym": iso in gym_days, "health": iso in health_days,
         })
+    # Strength sessions Apple Health recorded today that have no exercises logged yet.
+    unlogged_today = [w for w in week_other if w["date"] == today_iso and is_strength_activity(w["activity"])]
 
-    last7 = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
-    daily_rows = db.execute(
-        "SELECT day, metric, value FROM health_daily WHERE user_id = ? AND day >= ?",
-        (user_id, last7[0].isoformat()),
-    ).fetchall()
-    daily = {(row["day"], row["metric"]): row["value"] for row in daily_rows}
-    health_week_kcal = health_workouts(db, user_id, since=last7[0])
-    kcal_by_day = []
-    for day in last7:
-        iso = day.isoformat()
-        value = daily.get((iso, "active_kcal"))
-        if value is None:
-            # Without daily totals, fall back to the workouts' own calories.
-            value = sum(w["active_kcal"] or 0 for w in health_week_kcal if w["workout_date"] == iso) or None
-        kcal_by_day.append({"label": day.strftime("%a")[0], "value": value, "is_today": day == today})
-    peak = max((item["value"] or 0 for item in kcal_by_day), default=0)
-    for item in kcal_by_day:
-        item["height"] = round(100 * (item["value"] or 0) / peak) if peak else 0
-    week_kcal = sum(item["value"] or 0 for day, item in zip(last7, kcal_by_day) if day >= monday)
-    steps_today = daily.get((today.isoformat(), "steps"))
-
-    recent_gym = gym_sessions(db, user_id, limit=6)
+    recent_gym = gym_sessions(db, user_id, limit=4)
     oldest = min((date.fromisoformat(entry["date"]) for entry in recent_gym), default=None)
-    recent_health = health_workouts(db, user_id, since=oldest) if oldest else health_workouts(db, user_id, limit=6)
+    recent_health = health_workouts(db, user_id, since=oldest) if oldest else health_workouts(db, user_id, limit=4)
     timeline = recent_gym + link_health_to_gym(recent_gym, recent_health)
     timeline.sort(key=lambda entry: (entry["date"], entry.get("started_at") or (entry.get("health") or {}).get("started_at") or ""), reverse=True)
-    latest_weight, weight_change = body_weight_summary(db, user_id)
-    week_minutes = round(sum(entry["duration_s"] or 0 for entry in week_health) / 60)
+
+    # Nutrition and energy
+    last7 = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
+    daily = {
+        (row["day"], row["metric"]): row["value"]
+        for row in db.execute("SELECT day, metric, value FROM health_daily WHERE user_id = ? AND day >= ?", (user_id, last7[0].isoformat()))
+    }
+    today_values = {metric: value for (day, metric), value in daily.items() if day == today_iso}
+    if "active_kcal" not in today_values:
+        # Without a daily total, the day's workouts give a lower bound for energy burned.
+        workout_kcal = sum(w["active_kcal"] or 0 for w in week_health if w["date"] == today_iso)
+        if workout_kcal:
+            today_values["active_kcal"] = workout_kcal
+    has_nutrition = db.execute(
+        "SELECT EXISTS(SELECT 1 FROM health_daily WHERE user_id = ? AND metric = 'kcal_in')", (user_id,)
+    ).fetchone()[0] == 1
+    macro_kcal = {
+        "protein": (today_values.get("protein_g") or 0) * 4,
+        "carbs": (today_values.get("carbs_g") or 0) * 4,
+        "fat": (today_values.get("fat_g") or 0) * 9,
+    }
+    macro_total = sum(macro_kcal.values())
+    macro_share = {name: round(100 * value / macro_total) for name, value in macro_kcal.items()} if macro_total else None
+    intake_days = []
+    for day in last7:
+        iso = day.isoformat()
+        intake_days.append({
+            "label": day.strftime("%a")[0], "is_today": day == today,
+            "eaten": daily.get((iso, "kcal_in")), "burned": daily.get((iso, "active_kcal")),
+        })
+    peak = max((item["eaten"] or 0 for item in intake_days), default=0)
+    for item in intake_days:
+        item["height"] = round(100 * (item["eaten"] or 0) / peak) if peak else 0
+    logged_days = [item["eaten"] for item in intake_days if item["eaten"]]
+
+    # Body
+    body_rows = db.execute(
+        "SELECT measured_on, weight_kg, body_fat_pct, waist_cm, source FROM measurements WHERE user_id = ? ORDER BY measured_on DESC, id DESC LIMIT 60",
+        (user_id,),
+    ).fetchall()
+    body = None
+    if body_rows:
+        latest = body_rows[0]
+        previous = next((row for row in body_rows[1:] if row["measured_on"] != latest["measured_on"]), None)
+        cutoff = (today - timedelta(days=30)).isoformat()
+        recent_weights = [(row["measured_on"], row["weight_kg"]) for row in reversed(body_rows) if row["measured_on"] >= cutoff]
+        body = {
+            "date": latest["measured_on"], "weight": latest["weight_kg"], "source": latest["source"],
+            "change": latest["weight_kg"] - previous["weight_kg"] if previous else None,
+            "body_fat": next((row["body_fat_pct"] for row in body_rows if row["body_fat_pct"] is not None), None),
+            "waist": next((row["waist_cm"] for row in body_rows if row["waist_cm"] is not None), None),
+            "sparkline": sparkline(recent_weights),
+        }
+
     return render_template(
-        "overview.html", tab="home", today=today, week=week,
-        week_minutes=week_minutes, week_session_count=len(week_gym) + len(week_other),
-        week_days=len(gym_days | health_days), week_sets=sum(entry["sets"] for entry in week_gym),
-        week_volume=sum(entry["volume"] for entry in week_gym), week_kcal=week_kcal,
-        has_health=bool(daily_rows or health_week_kcal) or has_health_data(db, user_id),
-        kcal_by_day=kcal_by_day, steps_today=steps_today,
-        timeline=timeline[:6], exercises=recent_exercises(db, user_id),
-        latest_weight=latest_weight, weight_change=weight_change,
+        "overview.html", tab="home", today=today, week=week, unlogged_today=unlogged_today,
+        week_days=len(gym_days | health_days), week_session_count=len(week_gym) + len(week_other),
+        week_minutes=round(sum(entry["duration_s"] or 0 for entry in week_health) / 60),
+        week_volume=sum(entry["volume"] for entry in week_gym), week_sets=sum(entry["sets"] for entry in week_gym),
+        timeline=timeline[:4], exercises=recent_exercises(db, user_id, limit=4),
+        nutrition=today_values, has_nutrition=has_nutrition, macro_share=macro_share, intake_days=intake_days,
+        average_eaten=round(sum(logged_days) / len(logged_days)) if logged_days else None,
+        body=body,
     )
+
+
+def sparkline(points, width=300, height=56):
+    """SVG polyline points for a small trend line; None with fewer than two readings."""
+    if len(points) < 2:
+        return None
+    values = [value for _day, value in points]
+    low, high = min(values), max(values)
+    span = (high - low) or 1
+    step = width / (len(points) - 1)
+    return " ".join(f"{index * step:.1f},{height - 4 - (value - low) / span * (height - 8):.1f}" for index, value in enumerate(values))
 
 
 def has_health_data(db, user_id):
@@ -578,7 +631,13 @@ def exercise_history(name):
 @app.get("/log")
 @login_required
 def log_page():
-    return render_template("log.html", tab="log", today=local_today().isoformat(),
+    # Opened from the "log your exercises" prompt for an Apple Health workout.
+    health_session = None
+    if request.args.get("session", "").isdigit():
+        health_session = get_db().execute(
+            "SELECT * FROM health_workouts WHERE id = ? AND user_id = ?", (int(request.args["session"]), g.user["id"])
+        ).fetchone()
+    return render_template("log.html", tab="log", today=local_today().isoformat(), health_session=health_session,
                            known_exercises=known_exercise_names(g.user["id"]))
 
 
@@ -994,6 +1053,7 @@ def api_import_health():
         "workouts_saved": len(imported["workouts"]),
         "days_saved": len({day for day, _metric in imported["daily"]}),
         "metrics_received": imported["received"]["metrics"],
+        "metrics_unused": imported["unused_metrics"],
         "skipped": imported["skipped"],
         "skipped_reasons": imported["skipped_reasons"],
     }

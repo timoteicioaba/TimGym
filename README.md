@@ -57,7 +57,7 @@ The iPhone Shortcut in [SHORTCUT.md](SHORTCUT.md) remains an optional alternativ
 
 TimGym is installable as a home-screen app. On iPhone, open the site in Safari, tap **Share → Add to Home Screen**, and sign in once inside the installed app. The app has four tabs:
 
-- **Today** shows your week at a glance, this week's training days, volume, and active energy, then your recent sessions and recent exercises with your latest set, best set, and change since the previous session. Tap an exercise for its full history.
+- **Today** has three sections. **Workouts** shows the week, days trained, training time, recent sessions, and recent exercises with your latest set, best, and change; tap an exercise for its history. **Nutrition** shows today's calories eaten and burned, steps, the protein/carbs/fat split, and the last 7 days of intake. **Body** shows your latest weight, body fat, waist, and a 30-day trend. When Apple Health recorded a strength workout today that you haven't logged, a prompt at the top takes you to Log for that session.
 - **Log** is where you type workouts. Tap the chips with your recent exercise names to start a line, and add body check-ins.
 - **Progress** has the main-lift charts, body weight, and imported Apple Health workouts.
 - **Settings** has Apple Health sync, your API key, and sign-out.
@@ -74,7 +74,7 @@ Websites can't read Apple Health directly, so an iPhone app sends the data to Ti
    - Header: `Authorization: Bearer YOUR_TIMGYM_KEY`
    - Format **JSON**, export version **2**, aggregation **Days**
 
-   The **Workouts** automation sends your Apple Health workouts. The **Health metrics** automation sends **Active Energy**, **Step Count**, **Weight**, **Body Fat Percentage**, and **Waist Circumference**.
+   The **Workouts** automation sends your Apple Health workouts. The **Health metrics** automation sends **Active Energy**, **Step Count**, **Weight**, **Body Fat Percentage**, **Waist Circumference**, and for nutrition **Dietary Energy**, **Protein**, **Carbohydrates**, and **Total Fat**. Food apps such as MyFitnessPal, Lose It!, or Cronometer write those to Apple Health. If a metric arrives under a name TimGym does not recognize, **Settings → Recent imports** lists it as “received but not used”.
 3. Run it once manually with a short range, such as the last 7 days. **Settings → Apple Health** shows how many workouts and days arrived. Uploads are limited to 50 MB, so sync long histories in parts.
 
 If Health Auto Export only reports “error”, run `docker compose logs --tail=20 timgym`. Every refused import is logged with its reason (for example an unknown API key, a body that is not JSON, or an upload over the limit). The JSON response also carries the reason in `error`.
