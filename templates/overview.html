@@ -35,7 +35,7 @@
   <div class="stat"><span class="stat-label">{{ "Training time" if week_minutes else "Volume" }}</span>
     {% if week_minutes %}<span class="stat-value">{% if week_minutes >= 60 %}{{ week_minutes // 60 }}<span class="stat-unit"> h </span>{{ "%02d"|format(week_minutes % 60) }}{% else %}{{ week_minutes }}{% endif %}<span class="stat-unit"> min</span></span>
     <span class="stat-note">{% if week_volume %}{{ "{:,.0f}".format(week_volume) }} kg lifted{% else %}From Apple Health{% endif %}</span>
-    {% else %}<span class="stat-value">{{ "{:,.0f}".format(week_volume) }}<span class="stat-unit"> kg</span></span><span class="stat-note">{{ week_sets }} sets this week</span>{% endif %}</div>
+    {% else %}<span class="stat-value">{{ "{:,.0f}".format(week_volume) }}<span class="stat-unit"> kg</span></span><span class="stat-note">{{ week_sets }} set{{ "" if week_sets == 1 else "s" }} this week</span>{% endif %}</div>
 </div>
 {% if timeline %}
 <div class="list">

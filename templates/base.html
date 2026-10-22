@@ -16,6 +16,7 @@
 </head>
 <body>
 {% block body %}
+<div id="page">
 <header class="app-bar">
   <div class="app-bar-inner">
     <div>{% block bar_lead %}{% endblock %}<h1 class="app-title">{% block heading %}{% endblock %}</h1></div>
@@ -23,9 +24,12 @@
   </div>
 </header>
 <main class="app-shell">
-  {% for message in get_flashed_messages() %}<p class="flash" role="status">{{ message }}</p>{% endfor %}
+  {# Background tab loads must not consume one-time messages meant for a real page view. #}
+  {% if not request.headers.get("X-Prefetch") %}{% for message in get_flashed_messages() %}<p class="flash" role="status">{{ message }}</p>{% endfor %}{% endif %}
   {% block content %}{% endblock %}
 </main>
+{% block scripts %}{% endblock %}
+</div>
 <nav class="tab-bar" aria-label="Main">
   <div class="tab-bar-inner">
     <a class="tab{% if tab == 'home' %} active{% endif %}" href="{{ url_for('index') }}"{% if tab == 'home' %} aria-current="page"{% endif %}>
@@ -38,7 +42,92 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</a>
   </div>
 </nav>
+<script>
+// Switch between app pages without a full reload: load the next page in the
+// background (prefetched after load and on touch), swap #page, and keep the tab
+// bar in place. Anything unexpected falls back to normal navigation.
+(() => {
+  if (!window.fetch || !window.DOMParser || !history.pushState) return;
+  const FRESH_MS = 20000;
+  const cache = new Map();
+  let shown = location.pathname + location.search;
+  const appPath = path => /^\/($|log$|progress$|settings$|exercises\/)/.test(path);
+  const eligible = link => link && link.origin === location.origin && !link.target && !link.hasAttribute("download")
+    && appPath(link.pathname) && !(link.pathname === location.pathname && link.hash);
+
+  function load(url) {
+    const key = url.split("#")[0];
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.time < FRESH_MS) return hit.promise;
+    const promise = fetch(key, {headers: {"X-Prefetch": "1"}, credentials: "same-origin"}).then(response => {
+      const html = (response.headers.get("content-type") || "").includes("text/html");
+      if (!response.ok || response.redirected || !html) throw new Error("full navigation needed");
+      return response.text();
+    });
+    cache.set(key, {time: Date.now(), promise});
+    promise.catch(() => cache.delete(key));
+    return promise;
+  }
+
+  function swap(html, url, push) {
+    const next = new DOMParser().parseFromString(html, "text/html");
+    const nextPage = next.getElementById("page");
+    const page = document.getElementById("page");
+    if (!nextPage || !page) { location.href = url; return; }
+    page.replaceWith(document.adoptNode(nextPage));
+    document.title = next.title;
+    const nextTabs = next.querySelectorAll(".tab-bar .tab");
+    document.querySelectorAll(".tab-bar .tab").forEach((tab, index) => {
+      const source = nextTabs[index];
+      if (!source) return;
+      tab.className = source.className;
+      if (source.hasAttribute("aria-current")) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
+    });
+    if (push) history.pushState({}, "", url);
+    shown = location.pathname + location.search;
+    // Scripts parsed from a fetched page do not run; recreate them, block-scoped so re-runs don't clash.
+    nextPage.querySelectorAll("script").forEach(old => {
+      const script = document.createElement("script");
+      script.textContent = "{\n" + old.textContent + "\n}";
+      old.replaceWith(script);
+    });
+    const target = location.hash && document.getElementById(location.hash.slice(1));
+    if (target) target.scrollIntoView(); else window.scrollTo(0, 0);
+    cache.delete(url.split("#")[0]);
+    prefetchTabs();
+  }
+
+  function go(url, push) {
+    load(url).then(html => swap(html, url, push)).catch(() => { location.href = url; });
+  }
+
+  function prefetchTabs() {
+    const idle = window.requestIdleCallback || (callback => setTimeout(callback, 600));
+    idle(() => document.querySelectorAll(".tab-bar .tab").forEach(tab => {
+      if (tab.pathname !== location.pathname) load(tab.href).catch(() => {});
+    }));
+  }
+
+  document.addEventListener("pointerdown", event => {
+    const link = event.target.closest && event.target.closest("a");
+    if (eligible(link)) load(link.href).catch(() => {});
+  }, {passive: true});
+  document.addEventListener("click", event => {
+    const link = event.target.closest && event.target.closest("a");
+    if (!eligible(link) || event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (link.closest(".tab-bar")) {
+      document.querySelectorAll(".tab-bar .tab").forEach(tab => tab.classList.toggle("active", tab === link));
+    }
+    go(link.href, true);
+  });
+  window.addEventListener("popstate", () => {
+    // Hash-only changes (e.g. "#check-in") stay on the same page.
+    if (location.pathname + location.search !== shown) go(location.href, false);
+  });
+  prefetchTabs();
+})();
+</script>
 {% endblock %}
-{% block scripts %}{% endblock %}
 </body>
 </html>

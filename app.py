@@ -5,6 +5,7 @@ import re
 import secrets
 import sqlite3
 import sys
+import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
@@ -28,6 +29,8 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=True,
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+    # Static files are versioned by URL (app.css?v=...), so phones can keep them.
+    SEND_FILE_MAX_AGE_DEFAULT=timedelta(days=30),
     MAX_CONTENT_LENGTH=50 * 1024 * 1024,  # first Apple Health syncs can cover months of data
 )
 
@@ -189,6 +192,19 @@ def valid_csrf():
     expected = session.get("_csrf", "")
     actual = request.form.get("_csrf", "") or request.headers.get("X-CSRF-Token", "")
     return bool(expected and actual and secrets.compare_digest(expected, actual))
+
+
+@app.before_request
+def start_timer():
+    g.started = time.perf_counter()
+
+
+@app.after_request
+def add_server_timing(response):
+    # Lets the browser's network panel show how long TimGym itself took.
+    if "started" in g:
+        response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - g.started) * 1000:.1f}"
+    return response
 
 
 @app.before_request
@@ -1136,7 +1152,7 @@ def api_me():
 
 @app.get("/openapi.yaml")
 def openapi_spec():
-    return send_file(Path(__file__).with_name("openapi.yaml"), mimetype="application/yaml")
+    return send_file(Path(__file__).with_name("openapi.yaml"), mimetype="application/yaml", max_age=0)
 
 
 def create_user(username, password):
