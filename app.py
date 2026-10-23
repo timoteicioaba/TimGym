@@ -1331,13 +1331,16 @@ def vapid_keys():
     return g.vapid
 
 
-def notify(user_id, payload):
+def notify(user_id, payload, errors=None):
     """Send a push to every device the user enabled; forget ones that are gone."""
     db = get_db()
     subscriptions = db.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?", (user_id,)).fetchall()
     if not subscriptions:
         return 0
-    delivered, gone = push.send(vapid_keys(), [dict(row) for row in subscriptions], payload, request.host_url.rstrip("/"))
+    errors = [] if errors is None else errors
+    delivered, gone = push.send(vapid_keys(), [dict(row) for row in subscriptions], payload, request.host_url.rstrip("/"), errors)
+    for error in errors:
+        app.logger.warning("Push to user %s failed: %s", user_id, error)
     if gone:
         db.executemany("DELETE FROM push_subscriptions WHERE endpoint = ?", [(endpoint,) for endpoint in gone])
         db.commit()
@@ -1587,10 +1590,13 @@ def push_subscribe():
 def push_test():
     if not valid_csrf():
         return {"error": "Your session expired. Refresh the page and try again."}, 400
-    delivered = notify(g.user["id"], {"title": "TimGym", "body": "Notifications are working.", "url": url_for("index")})
+    errors = []
+    delivered = notify(g.user["id"], {"title": "TimGym", "body": "Notifications are working.", "url": url_for("index")}, errors)
     if not delivered:
-        return {"error": "No device received it. Enable notifications on this device first."}, 404
-    return {"delivered": delivered}
+        if errors:
+            return {"error": "The push service refused it: " + "; ".join(errors)}, 502
+        return {"error": "No device is registered. Tap “Enable on this device” first."}, 404
+    return {"delivered": delivered, "failed": errors}
 
 
 @app.get("/sw.js")

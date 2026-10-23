@@ -38,12 +38,16 @@ class LiveWorkoutTests(unittest.TestCase):
         self.client = timgym.app.test_client()
         self.login(self.user_id)
         self.sent = []
+        self.refuse = False
         patcher = mock.patch.object(timgym.push, "send", side_effect=self.fake_send)
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def fake_send(self, vapid, subscriptions, payload, subject):
+    def fake_send(self, vapid, subscriptions, payload, subject, errors=None):
         self.sent.append((len(subscriptions), payload, subject))
+        if self.refuse:
+            errors.append("Apple answered 403: {\"reason\":\"BadJwtToken\"}")
+            return 0, []
         return len(subscriptions), []
 
     def login(self, user_id):
@@ -155,6 +159,11 @@ class LiveWorkoutTests(unittest.TestCase):
         self.assertEqual(self.subscribe().status_code, 200)
         self.assertEqual(self.subscribe().status_code, 200)  # same device again
         self.assertEqual(self.post("/push/test").json["delivered"], 1)
+        self.refuse = True
+        refused = self.post("/push/test")
+        self.assertEqual(refused.status_code, 502)
+        self.assertIn("BadJwtToken", refused.json["error"])
+        self.refuse = False
         settings = self.client.get("/settings").get_data(as_text=True)
         self.assertIn("1 device enabled", settings)
         self.assertIn("/api/live/start", settings)
@@ -173,16 +182,18 @@ class PushModuleTests(unittest.TestCase):
         self.assertEqual(push.public_key(first), push.public_key(push.load_or_create_vapid(directory)))
         self.assertEqual(len(push.public_key(first)), 87)  # 65-byte uncompressed point, base64url
 
-        gone_response = mock.Mock(status_code=410)
+        gone_response = mock.Mock(status_code=410, text='{"reason":"Unregistered"}')
         def fake_webpush(info, **kwargs):
             if info["endpoint"].endswith("gone"):
                 raise push.WebPushException("gone", response=gone_response)
         with mock.patch.object(push, "webpush", side_effect=fake_webpush):
+            errors = []
             delivered, gone = push.send(first, [
                 {"endpoint": "https://push.example/ok", "p256dh": "a", "auth": "b"},
-                {"endpoint": "https://push.example/gone", "p256dh": "a", "auth": "b"},
-            ], {"title": "x"}, "https://gym.example")
-        self.assertEqual((delivered, gone), (1, ["https://push.example/gone"]))
+                {"endpoint": "https://web.push.apple.com/gone", "p256dh": "a", "auth": "b"},
+            ], {"title": "x"}, "https://gym.example", errors)
+        self.assertEqual((delivered, gone), (1, ["https://web.push.apple.com/gone"]))
+        self.assertEqual(errors, ['Apple answered 410: {"reason":"Unregistered"}'])
 
 
 if __name__ == "__main__":

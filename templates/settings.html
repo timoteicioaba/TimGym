@@ -76,6 +76,7 @@
     <button class="full-button" id="push-enable" type="button">Enable on this device</button>
     <button class="secondary full-button" id="push-test" type="button"{% if not push_devices %} disabled{% endif %}>Send a test</button>
   </div>
+  <p class="muted mt-2" id="push-device"></p>
   <p class="muted mt-2" id="push-status" role="status" aria-live="polite"></p>
 {% endcall %}
 
@@ -123,14 +124,42 @@ async function postJson(url, body) {
   return result;
 }
 
+const pushDevice = document.getElementById("push-device");
+const installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const DENIED_HELP = "Notifications are blocked for TimGym. On iPhone: Settings → Notifications → TimGym → turn on Allow Notifications, then come back and tap Enable again.";
+
+async function describeDevice() {
+  if (!installed) {
+    pushDevice.textContent = "This device: opened in the browser. Open TimGym from its Home Screen icon to use notifications.";
+    return;
+  }
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    pushDevice.textContent = "This device: notifications aren't available. iOS 16.4 or later is needed.";
+    return;
+  }
+  const permission = Notification.permission;
+  let registered = false;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration("/");
+    registered = Boolean(registration && await registration.pushManager.getSubscription());
+  } catch (error) {}
+  const words = {granted: "allowed", denied: "blocked", default: "not asked yet"};
+  pushDevice.textContent = "This device: permission " + (words[permission] || permission) + ", " + (registered ? "registered for notifications." : "not registered yet.");
+  if (permission === "denied") pushStatus.textContent = DENIED_HELP;
+}
+describeDevice();
+
 document.getElementById("push-enable").addEventListener("click", async () => {
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
     pushStatus.textContent = "This browser can't receive notifications. On iPhone, open TimGym from its Home Screen icon (iOS 16.4 or later) and try again.";
     return;
   }
   try {
-    if (await Notification.requestPermission() !== "granted") {
-      pushStatus.textContent = "Notifications are blocked. Allow them for TimGym in iPhone Settings → Notifications.";
+    // Ask first, directly from the tap: iOS only shows the prompt for a user gesture.
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      pushStatus.textContent = permission === "denied" ? DENIED_HELP : "The permission prompt was dismissed. Tap Enable again and choose Allow.";
+      describeDevice();
       return;
     }
     const registration = await navigator.serviceWorker.register("/sw.js", {scope: "/"});
@@ -138,8 +167,9 @@ document.getElementById("push-enable").addEventListener("click", async () => {
     const subscription = await registration.pushManager.getSubscription()
       || await registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: keyBytes(pushKey)});
     await postJson({{ url_for('push_subscribe')|tojson }}, subscription.toJSON());
-    pushStatus.textContent = "Notifications are on for this device.";
+    pushStatus.textContent = "Notifications are on for this device. Tap “Send a test”.";
     document.getElementById("push-test").disabled = false;
+    describeDevice();
   } catch (error) {
     pushStatus.textContent = "Couldn't enable notifications: " + error.message;
   }
@@ -148,7 +178,8 @@ document.getElementById("push-enable").addEventListener("click", async () => {
 document.getElementById("push-test").addEventListener("click", async () => {
   try {
     const result = await postJson({{ url_for('push_test')|tojson }});
-    pushStatus.textContent = "Sent to " + result.delivered + " device" + (result.delivered === 1 ? "" : "s") + ".";
+    pushStatus.textContent = "Sent to " + result.delivered + " device" + (result.delivered === 1 ? "" : "s") + ". It should appear within a few seconds; lock the phone or leave the app if it doesn't show while TimGym is open."
+      + (result.failed && result.failed.length ? " Some devices failed: " + result.failed.join("; ") : "");
   } catch (error) {
     pushStatus.textContent = error.message;
   }

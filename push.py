@@ -45,8 +45,15 @@ def public_key(vapid):
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 
-def send(vapid, subscriptions, payload, subject):
+def _service(endpoint):
+    host = endpoint.split("/")[2] if endpoint.count("/") >= 2 else endpoint
+    return "Apple" if host.endswith("push.apple.com") else host
+
+
+def send(vapid, subscriptions, payload, subject, errors=None):
     """Push payload to each subscription. Returns (delivered, gone_endpoints).
+
+    If errors is a list, a short reason is appended for each failed delivery.
 
     subject identifies the sender to push services (Apple requires an https: or
     mailto: URL). Subscriptions the push service reports as gone (404/410) are
@@ -63,6 +70,11 @@ def send(vapid, subscriptions, payload, subject):
             status = getattr(exc.response, "status_code", None)
             if status in (404, 410):
                 gone.append(subscription["endpoint"])
-        except requests.RequestException:
-            continue  # unreachable push service; try again next time
+            if errors is not None:
+                detail = (getattr(exc.response, "text", "") or str(exc))[:200]
+                errors.append(f"{_service(subscription['endpoint'])} answered {status}: {detail}")
+        except requests.RequestException as exc:
+            # Unreachable push service; try again next time.
+            if errors is not None:
+                errors.append(f"{_service(subscription['endpoint'])} unreachable: {type(exc).__name__}")
     return delivered, gone
