@@ -137,13 +137,13 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertIn("Yesterday</h1>", page)
         self.assertIn("2,000", page)              # 8368 kJ
         self.assertIn("150<small> g</small>", page)
-        self.assertIn("width:28%", page)          # protein: 150 g × 4 = 600 of 2,120 kcal
+        self.assertIn("--share:28%", page)        # protein: 150 g × 4 = 600 of 2,120 kcal
         self.assertIn("6 h 30 min", page)
         self.assertIn("00:30–07:15", page)
         self.assertIn("Deep 1h 00m", page)
         settings = self.client.get("/settings").get_data(as_text=True)
-        self.assertIn('class="chip-small on">Nutrition', settings)
-        self.assertIn('class="chip-small on">Sleep', settings)
+        self.assertIn('class="tag is-on">Nutrition', settings)
+        self.assertIn('class="tag is-on">Sleep', settings)
 
     def test_future_or_invalid_days_show_today(self):
         self.login()

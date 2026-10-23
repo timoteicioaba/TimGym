@@ -1,39 +1,40 @@
 {% extends "base.html" %}
+{% import "components.html" as ui with context %}
 {% block title %}Settings · TimGym{% endblock %}
 {% block bar_lead %}<span class="eyebrow">{{ user.username }}</span>{% endblock %}
 {% block heading %}Settings{% endblock %}
 {% block content %}
 {% if new_api_key %}
-<section class="card">
-  <h2 style="font-size:1.05rem">Your new TimGym key</h2>
-  <p class="muted">Copy it now; it is shown only once. Anyone with this key can add data to your account. Any app that used the previous key needs this one.</p>
-  <div class="key-box">{{ new_api_key }}</div>
-</section>
+{% call ui.card() %}
+  <h3>Your new TimGym key</h3>
+  <p class="muted mt-1">Copy it now; it is shown only once. Anyone with this key can add data to your account. Any app that used the previous key needs this one.</p>
+  <div class="key-box mt-3">{{ new_api_key }}</div>
+{% endcall %}
 {% endif %}
 
-<h2 class="section-title" id="apple-health">Apple Health</h2>
-<section class="card">
+{{ ui.section("Apple Health", id="apple-health") }}
+{% call ui.card() %}
   <div class="kv"><span>Workouts imported</span><span>{{ sync.workouts }}</span></div>
   <div class="kv"><span>Days with daily totals</span><span>{{ sync.days }}</span></div>
   <div class="kv"><span>Last import</span><span>{{ sync.last_sync[:16] ~ " UTC" if sync.last_sync else "Never" }}</span></div>
   {% if imports %}
-  <h3 style="font-size:.9rem;margin:14px 0 4px">Recent imports</h3>
+  <h3 class="mt-3">Recent imports</h3>
   {% for item in imports %}
-  <div class="kv" style="display:block">
-    <div style="display:flex;justify-content:space-between;gap:10px"><span>{{ item.received_at[:16] }} UTC{% if item.source and item.source.startswith("file ") %} · <span title="{{ item.source[5:] }}">file</span>{% endif %}</span>
+  <div class="kv kv--stacked">
+    <div class="kv-line"><span>{{ item.received_at[:16] }} UTC{% if item.source and item.source.startswith("file ") %} · <span title="{{ item.source[5:] }}">file</span>{% endif %}</span>
       <span>{{ item.workouts_saved }} workout{{ "" if item.workouts_saved == 1 else "s" }} · {{ item.days_saved }} day{{ "" if item.days_saved == 1 else "s" }}{% if item.measurements_saved %} · {{ item.measurements_saved }} check-in{{ "" if item.measurements_saved == 1 else "s" }}{% endif %}{% if item.nights_saved %} · {{ item.nights_saved }} night{{ "" if item.nights_saved == 1 else "s" }}{% endif %}</span></div>
-    {% if item.workouts_received == 0 and not item.metrics_received %}<p class="muted" style="margin:4px 0 0">This export was empty. Check the automation's date range and selected data.</p>{% endif %}
-    <div class="import-groups">
-      {% if item.workouts_received %}<span class="chip-small on">Workouts {{ item.workouts_received }}</span>{% endif %}
-      {% for label in ["Activity", "Nutrition", "Sleep", "Body"] %}<span class="chip-small{% if label in item.groups %} on{% endif %}">{{ label }}{% if label not in item.groups %} ✕{% endif %}</span>{% endfor %}
+    {% if item.workouts_received == 0 and not item.metrics_received %}<p class="fine-print">This export was empty. Check the automation's date range and selected data.</p>{% endif %}
+    <div class="tags">
+      {% if item.workouts_received %}<span class="tag is-on">Workouts {{ item.workouts_received }}</span>{% endif %}
+      {% for label in ["Activity", "Nutrition", "Sleep", "Body"] %}<span class="tag{% if label in item.groups %} is-on{% endif %}">{{ label }}{% if label not in item.groups %} ✕{% endif %}</span>{% endfor %}
     </div>
-    {% if item.metrics_unused %}<details class="unused-metrics"><summary>{{ item.metrics_unused|length }} other metric{{ "" if item.metrics_unused|length == 1 else "s" }} received but not used</summary><p>{{ item.metrics_unused|join(", ") }}</p></details>{% endif %}
-    {% if item.skipped_reasons %}<p class="muted" style="margin:4px 0 0;color:var(--warn)">Skipped {{ item.skipped }}: {{ item.skipped_reasons|join("; ") }}</p>{% endif %}
+    {% if item.metrics_unused %}<details class="fine-print"><summary>{{ item.metrics_unused|length }} other metric{{ "" if item.metrics_unused|length == 1 else "s" }} received but not used</summary><p>{{ item.metrics_unused|join(", ") }}</p></details>{% endif %}
+    {% if item.skipped_reasons %}<p class="fine-print text-warn">Skipped {{ item.skipped }}: {{ item.skipped_reasons|join("; ") }}</p>{% endif %}
   </div>
   {% endfor %}
   {% endif %}
-  <details style="margin-top:12px">
-    <summary class="muted" style="cursor:pointer;font-weight:650;color:var(--accent)">Set up automatic sync</summary>
+  <details class="disclosure">
+    <summary>Set up automatic sync</summary>
     <p class="muted">Websites can’t read Apple Health directly, so an iPhone app sends it to TimGym. <strong>Health Auto Export</strong> (App Store) does this on a schedule; its automations need the app’s premium tier.</p>
     <ol class="steps">
       <li>Generate your TimGym key below{% if has_key %} (or use the one you already set up){% endif %}.</li>
@@ -49,34 +50,34 @@
     <p class="muted">If the app only says “error”, run <code>docker compose logs --tail=20 timgym</code> on the server. TimGym logs why it refused each import.</p>
     <p class="muted">Re-sending the same days is safe: workouts are matched by their Health ID and daily totals are replaced, never doubled.</p>
   </details>
-</section>
+{% endcall %}
 
-<h2 class="section-title" id="import">Import a file</h2>
-<section class="card">
-  <p class="muted" style="margin-top:0">For a bulk import, such as your full history: in Health Auto Export, use <strong>Manual Export</strong> with format <strong>JSON</strong>, aggregation <strong>Days</strong>, and the date range you want, then pick the file here. Importing data that is already in TimGym updates it without duplicates. Up to 100 MB per file.</p>
-  <form method="post" action="{{ url_for('import_health_file') }}" enctype="multipart/form-data" class="import-form">
+{{ ui.section("Import a file", id="import") }}
+{% call ui.card() %}
+  <p class="muted card-intro">For a bulk import, such as your full history: in Health Auto Export, use <strong>Manual Export</strong> with format <strong>JSON</strong>, aggregation <strong>Days</strong>, and the date range you want, then pick the file here. Importing data that is already in TimGym updates it without duplicates. Up to 100 MB per file.</p>
+  <form method="post" action="{{ url_for('import_health_file') }}" enctype="multipart/form-data" class="stack">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <input type="file" name="export" accept=".json,application/json" required aria-label="Health Auto Export JSON file">
     <button class="full-button" type="submit">Import</button>
   </form>
-</section>
+{% endcall %}
 
-<h2 class="section-title">API key</h2>
-<section class="card">
-  <p class="muted" style="margin-top:0">Used by Apple Health sync, the optional iPhone Shortcut, and a custom GPT. {% if has_key %}A key is active; rotating it disconnects anything using the old one.{% else %}No key yet.{% endif %}</p>
+{{ ui.section("API key") }}
+{% call ui.card() %}
+  <p class="muted card-intro">Used by Apple Health sync, the optional iPhone Shortcut, and a custom GPT. {% if has_key %}A key is active; rotating it disconnects anything using the old one.{% else %}No key yet.{% endif %}</p>
   <form method="post" action="{{ url_for('create_api_key') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="secondary full-button" type="submit">{{ "Rotate my key" if has_key else "Generate my key" }}</button></form>
-  <p class="muted" style="margin:12px 0 0"><a href="{{ url_for('openapi_spec') }}">API specification</a></p>
-</section>
+  <p class="muted mt-3"><a href="{{ url_for('openapi_spec') }}">API specification</a></p>
+{% endcall %}
 
-<h2 class="section-title">Install the app</h2>
-<section class="card">
-  <p class="muted" style="margin:0">On iPhone, open TimGym in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It opens full screen like an app. Sign in once inside the installed app.</p>
-</section>
+{{ ui.section("Install the app") }}
+{% call ui.card() %}
+  <p class="muted">On iPhone, open TimGym in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It opens full screen like an app. Sign in once inside the installed app.</p>
+{% endcall %}
 
-<h2 class="section-title">Workout parser</h2>
-<section class="card">
-  <p class="muted" style="margin:0">Notes are read by a parser that runs inside TimGym, with no AI service or extra cost. It understands “Squat 3x5 @ 80”, “Bench 60x8, 70x6, 80x5”, “Deadlift 140 for 5”, “OHP 40kg 8,8,7”, and “3 sets of 8 at 60 lb”. Numbers without a unit are kilograms. Everything stays editable before saving.</p>
-</section>
+{{ ui.section("Workout parser") }}
+{% call ui.card() %}
+  <p class="muted">Notes are read by a parser that runs inside TimGym, with no AI service or extra cost. It understands “Squat 3x5 @ 80”, “Bench 60x8, 70x6, 80x5”, “Deadlift 140 for 5”, “OHP 40kg 8,8,7”, and “3 sets of 8 at 60 lb”. Numbers without a unit are kilograms. Everything stays editable before saving.</p>
+{% endcall %}
 
-<form method="post" action="{{ url_for('logout') }}" style="margin-top:22px"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="danger full-button" type="submit">Sign out</button></form>
+<form method="post" action="{{ url_for('logout') }}" class="mt-5"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="danger full-button" type="submit">Sign out</button></form>
 {% endblock %}

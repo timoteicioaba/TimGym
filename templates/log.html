@@ -1,28 +1,29 @@
 {% extends "base.html" %}
+{% import "components.html" as ui with context %}
 {% block title %}Log · TimGym{% endblock %}
 {% block bar_lead %}<span class="eyebrow">New entry</span>{% endblock %}
 {% block heading %}Log{% endblock %}
 {% block content %}
 <section class="card" id="workout-log">
-  {% if health_session %}<div class="session-banner"><span class="health-badge">Apple Health</span><span>Logging exercises for {{ health_session.activity }} · {{ health_session.workout_date|relative_day }} {{ health_session.started_at|clock }}{% if health_session.duration_s %} · {{ health_session.duration_s|duration }}{% endif %}</span></div>{% endif %}
+  {% if health_session %}<div class="session-banner">{{ ui.badge() }}<span>Logging exercises for {{ health_session.activity }} · {{ health_session.workout_date|relative_day }} {{ health_session.started_at|clock }}{% if health_session.duration_s %} · {{ health_session.duration_s|duration }}{% endif %}</span></div>{% endif %}
   <label for="workout-note">YOUR WORKOUT</label>
   <textarea id="workout-note" maxlength="4000" autocapitalize="sentences" enterkeyhint="enter" placeholder="Squat 100kg 5,5,4&#10;Bench 60x8, 70x6, 80x5 felt strong&#10;Pull ups 3x10"></textarea>
-  {% if known_exercises %}<div class="hint-chips" aria-label="Recent exercises">{% for name in known_exercises[:12] %}<button class="chip" type="button" data-insert="{{ name }}">{{ name }}</button>{% endfor %}</div>{% endif %}
-  <button class="full-button" id="interpret-workout" type="button" style="margin-top:12px">Parse workout</button>
+  {% if known_exercises %}<div class="chip-row" aria-label="Recent exercises">{% for name in known_exercises[:12] %}<button class="chip" type="button" data-insert="{{ name }}">{{ name }}</button>{% endfor %}</div>{% endif %}
+  <button class="full-button mt-3" id="interpret-workout" type="button">Parse workout</button>
   <div class="workout-preview" id="workout-preview" hidden>
     <div class="preview-head"><h3>Review before saving</h3><input id="workout-date" type="date" aria-label="Workout date"></div>
     <div id="workout-preview-content"></div>
     <button class="secondary small-button" id="add-exercise" type="button">+ Add exercise</button>
-    <button class="full-button" id="save-workout" type="button" style="margin-top:12px">Save workout</button>
+    <button class="full-button mt-3" id="save-workout" type="button">Save workout</button>
   </div>
   <datalist id="known-exercises">{% for name in known_exercises %}<option value="{{ name }}">{% endfor %}</datalist>
-  <div class="model-progress" id="model-progress" hidden aria-hidden="true"><span></span></div>
-  <p class="muted" id="workout-ai-status" role="status" aria-live="polite" style="margin:10px 0 0">Write it like a note: “Bench 60x8, 70x6”, “Squat 3x5 @ 100”, “Deadlift 140 for 5”. One exercise per line.</p>
+  <div class="progress-bar" id="model-progress" hidden aria-hidden="true"><span></span></div>
+  <p class="muted mt-3" id="workout-ai-status" role="status" aria-live="polite">Write it like a note: “Bench 60x8, 70x6”, “Squat 3x5 @ 100”, “Deadlift 140 for 5”. One exercise per line.</p>
 </section>
 
 <details class="card" id="check-in">
   <summary>Body check-in <span>Weight &amp; measurements</span></summary>
-  <form method="post" action="{{ url_for('add_measurement') }}" style="margin-top:16px">
+  <form method="post" action="{{ url_for('add_measurement') }}">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <div class="fields"><div><label for="measured_on">DATE</label><input id="measured_on" name="measured_on" type="date" value="{{ today }}" required></div>
     <div><label for="weight">BODY WEIGHT · KG</label><input id="weight" name="weight_kg" type="number" inputmode="decimal" min="1" max="1000" step="0.1" placeholder="82.4" required></div></div>

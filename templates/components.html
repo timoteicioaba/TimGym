@@ -1,0 +1,91 @@
+{#- Shared UI components. Import with: {% import "components.html" as ui with context %} -#}
+
+{% macro icon(name) -%}
+<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+{%- if name == "home" %}<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>
+{%- elif name == "plus" %}<path d="M12 5v14M5 12h14"/>
+{%- elif name == "chart" %}<path d="M3 20h18M6 16l4-5 3 3 5-7"/>
+{%- elif name == "gear" %}<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+{%- elif name == "dumbbell" %}<path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/>
+{%- elif name == "pulse" %}<path d="M3 12h4l3-8 4 16 3-8h4"/>
+{%- endif %}</svg>
+{%- endmacro %}
+
+{# A section heading with an optional link or note on the right. #}
+{% macro section(title, aside=none, href=none, id=none) -%}
+<h2 class="section-title"{% if id %} id="{{ id }}"{% endif %}>{{ title }}
+  {%- if href %}<a href="{{ href }}">{{ aside }}</a>{% elif aside %}<span>{{ aside }}</span>{% endif %}</h2>
+{%- endmacro %}
+
+{# A card. compact=True gives the dense Today cards a titled header with a colored dot. #}
+{% macro card(title=none, tone=none, meta=none, compact=False, id=none, tag="section") -%}
+<{{ tag }} class="card{% if compact %} card--compact{% endif %}"{% if id %} id="{{ id }}"{% endif %}>
+  {%- if title %}
+  <header class="card-head">
+    <span class="card-title">{% if tone %}<i class="dot dot--{{ tone }}"></i>{% endif %}{{ title }}</span>
+    {%- if meta %}<span class="card-meta">{{ meta }}</span>{% endif %}
+  </header>
+  {%- endif %}
+  {{ caller() }}
+</{{ tag }}>
+{%- endmacro %}
+
+{% macro badge(text="Apple Health") -%}<span class="badge">{{ text }}</span>{%- endmacro %}
+
+{% macro empty(text) -%}<p class="empty">{{ text }}</p>{%- endmacro %}
+
+{% macro stat(label, value, unit=none, note=none) -%}
+<div class="stat">
+  <span class="label">{{ label }}</span>
+  <span class="stat-value">{{ value }}{% if unit %}<span class="unit"> {{ unit }}</span>{% endif %}</span>
+  {%- if note %}<span class="stat-note">{{ note }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Color key: items is a list of (modifier, label), e.g. [("deep", "Deep")]. #}
+{% macro legend(items, kind) -%}
+<div class="legend">{% for key, label in items %}<span><i class="swatch {{ kind }}-{{ key }}"></i>{{ label }}</span>{% endfor %}</div>
+{%- endmacro %}
+
+{% macro exercise_row(exercise) -%}
+<a class="row" href="{{ url_for('exercise_history', name=exercise.name) }}">
+  <div class="row-main">
+    <span class="row-title">{{ exercise.name }}</span>
+    <span class="row-sub">{{ exercise.last_date|relative_day }} · {{ exercise.summary }}</span>
+  </div>
+  <div class="row-end">
+    {% if exercise.top %}<strong>{{ exercise.top.weight_kg|kg }} kg</strong>{% endif %}
+    {% if exercise.change is not none and exercise.change != 0 %}<span class="{{ 'trend-up' if exercise.change > 0 else 'trend-down' }}">{{ '▲' if exercise.change > 0 else '▼' }} {{ exercise.change|abs|kg }} kg</span>
+    {% elif exercise.best %}best {{ exercise.best.weight_kg|kg }} kg{% endif %}
+  </div>
+  <span class="chevron" aria-hidden="true"></span>
+</a>
+{%- endmacro %}
+
+{# An Apple Health workout. Strength sessions without logged exercises link to Log. #}
+{% macro activity_row(entry) -%}
+{% set unlogged = entry.activity is strength and not entry.linked_exercises %}
+<{{ "a" if unlogged else "div" }} class="row"{% if unlogged %} href="{{ url_for('log_page', session=entry.id) }}"{% endif %}>
+  <span class="row-icon{% if not entry.activity is strength %} row-icon--info{% endif %}">{{ icon("dumbbell" if entry.activity is strength else "pulse") }}</span>
+  <div class="row-main">
+    <span class="row-title">{{ entry.activity|short_activity }}</span>
+    <span class="row-sub">{{ entry.date|relative_day }}
+      {%- if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}
+      {%- if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}
+      {%- if entry.linked_exercises %} · {{ entry.linked_exercises }} exercise{{ "" if entry.linked_exercises == 1 else "s" }} logged{% endif %}
+      {%- if unlogged %} · <span class="text-accent">Add exercises</span>{% endif %}</span>
+  </div>
+  {% if entry.active_kcal %}<div class="row-end"><strong>{{ entry.active_kcal|round|int }}</strong>kcal</div>{% endif %}
+  {% if unlogged %}<span class="chevron" aria-hidden="true"></span>{% endif %}
+</{{ "a" if unlogged else "div" }}>
+{%- endmacro %}
+
+{% macro measurement_row(row) -%}
+<div class="row">
+  <div class="row-main">
+    <span class="row-title">{{ "%.1f"|format(row.weight_kg) }} kg{% if row.body_fat_pct is not none %} <span class="muted">· {{ "%.1f"|format(row.body_fat_pct) }}% fat</span>{% endif %}</span>
+    <span class="row-sub">{% if row.source == "apple_health" %}{{ badge() }} {% endif %}{{ row.measured_on|relative_day }}
+      {%- for label, value in [("Waist", row.waist_cm), ("Chest", row.chest_cm), ("Hips", row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</span>
+  </div>
+</div>
+{%- endmacro %}

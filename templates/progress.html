@@ -1,25 +1,26 @@
 {% extends "base.html" %}
+{% import "components.html" as ui with context %}
 {% block title %}Progress · TimGym{% endblock %}
 {% block bar_lead %}<span class="eyebrow">Trends</span>{% endblock %}
 {% block heading %}Progress{% endblock %}
 {% block content %}
-<h2 class="section-title">Main lifts <span>Best working weight · kg</span></h2>
+{{ ui.section("Main lifts", "Best working weight · kg") }}
 {% for lift in lift_charts %}
-<section class="card">
-  <h3 style="font-size:1rem">{{ lift.name }}</h3>
-  <div class="range-legend"><span><i class="legend-dot range-1"></i>1–5 reps</span><span><i class="legend-dot range-2"></i>6–10 reps</span><span><i class="legend-dot range-3"></i>11+ reps</span></div>
+{% call ui.card() %}
+  <h3>{{ lift.name }}</h3>
+  {{ ui.legend([("1", "1–5 reps"), ("2", "6–10 reps"), ("3", "11+ reps")], "range") }}
   {% if lift.has_data %}<svg class="chart" viewBox="0 0 700 190" role="img" aria-label="{{ lift.name }} working weight trend">
     <line class="chart-grid" x1="48" y1="42" x2="680" y2="42"/><line class="chart-grid" x1="48" y1="98" x2="680" y2="98"/><line class="chart-grid" x1="48" y1="154" x2="680" y2="154"/>
     <text x="2" y="46">{{ "%.1f"|format(lift.chart_max) }} kg</text><text x="2" y="158">{{ "%.1f"|format(lift.chart_min) }} kg</text>
     {% for series in lift.series %}{% if series.points %}<polyline class="chart-line range-{{ series.key }}" points="{{ series.polyline }}"/>{% for point in series.points %}<circle class="chart-point range-{{ series.key }}" cx="{{ point.x }}" cy="{{ point.y }}" r="4"><title>{{ point.date }} · {{ series.label }} · {{ "%.1f"|format(point.weight) }} kg</title></circle>{% endfor %}{% endif %}{% endfor %}
     <text x="48" y="183">{{ lift.first_date }}</text><text x="620" y="183">{{ lift.last_date }}</text>
-  </svg>{% else %}<p class="empty" style="margin:12px 0 0">No weighted {{ lift.name|lower }} sets logged yet.</p>{% endif %}
-</section>
+  </svg>{% else %}{{ ui.empty("No weighted " ~ lift.name|lower ~ " sets logged yet.") }}{% endif %}
+{% endcall %}
 {% endfor %}
 
-<h2 class="section-title">Body weight <a href="{{ url_for('log_page') }}#check-in">Add check-in</a></h2>
-<section class="card">
-  {% if latest_weight is not none %}<p style="margin:0 0 10px"><strong style="font-size:1.5rem;letter-spacing:-.04em">{{ "%.1f"|format(latest_weight) }} kg</strong>
+{{ ui.section("Body weight", "Add check-in", url_for('log_page') ~ "#check-in") }}
+{% call ui.card() %}
+  {% if latest_weight is not none %}<p class="headline"><strong>{{ "%.1f"|format(latest_weight) }} kg</strong>
     {% if weight_change is not none %}<span class="muted"> · {% if weight_change > 0 %}+{% endif %}{{ "%.1f"|format(weight_change) }} kg since last</span>{% endif %}</p>{% endif %}
   {% if chart_points %}
   <svg class="chart" viewBox="0 0 700 210" role="img" aria-label="Body weight trend chart">
@@ -29,61 +30,34 @@
     {% for point in chart_points %}<circle class="chart-point" cx="{{ point.x }}" cy="{{ point.y }}" r="4"><title>{{ point.date }} · {{ "%.1f"|format(point.weight) }} kg</title></circle>{% endfor %}
     <text x="48" y="198">{{ chart_points[0].date }}</text><text x="620" y="198">{{ chart_points[-1].date }}</text>
   </svg>
-  {% else %}<p class="empty" style="margin:0">Your trend appears after your first check-in.</p>{% endif %}
-</section>
-{% if measurements %}
-<div class="list">
-  {% for row in measurements %}
-  <div class="row">
-    <div class="row-main"><span class="row-title">{{ "%.1f"|format(row.weight_kg) }} kg{% if row.body_fat_pct is not none %} <span class="muted">· {{ "%.1f"|format(row.body_fat_pct) }}% fat</span>{% endif %}</span>
-      <span class="row-sub">{% if row.source == "apple_health" %}<span class="health-badge">Apple Health</span> {% endif %}{{ row.measured_on|relative_day }}{% for label, value in [('Waist',row.waist_cm),('Chest',row.chest_cm),('Hips',row.hips_cm)] %}{% if value is not none %} · {{ label }} {{ "%.1f"|format(value) }} cm{% endif %}{% endfor %}</span></div>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
+  {% else %}{{ ui.empty("Your trend appears after your first check-in.") }}{% endif %}
+{% endcall %}
+{% if measurements %}<div class="list">{% for row in measurements %}{{ ui.measurement_row(row) }}{% endfor %}</div>{% endif %}
 
 {% if sleep_chart %}
-<h2 class="section-title">Sleep <span>Last 30 nights</span></h2>
-<section class="card">
-  <div class="sleep-summary">
-    <div><span class="stat-label">Average</span><strong>{{ sleep_chart.average_total|hours }}</strong></div>
-    {% if sleep_chart.average_deep %}<div><span class="stat-label">Deep</span><strong>{{ sleep_chart.average_deep|hm }}</strong></div>{% endif %}
-    {% if sleep_chart.average_rem %}<div><span class="stat-label">REM</span><strong>{{ sleep_chart.average_rem|hm }}</strong></div>{% endif %}
+{{ ui.section("Sleep", "Last 30 nights") }}
+{% call ui.card() %}
+  <div class="summary-grid">
+    <div><span class="label">Average</span><strong>{{ sleep_chart.average_total|hours }}</strong></div>
+    {% if sleep_chart.average_deep %}<div><span class="label">Deep</span><strong>{{ sleep_chart.average_deep|hm }}</strong></div>{% endif %}
+    {% if sleep_chart.average_rem %}<div><span class="label">REM</span><strong>{{ sleep_chart.average_rem|hm }}</strong></div>{% endif %}
   </div>
   <div class="sleep-chart" role="img" aria-label="Hours asleep each night for the last 30 nights, split by stage">
-    <span class="sleep-goal" style="bottom:calc(16px + (100% - 16px) * {{ (8 / sleep_chart.scale)|round(3) }})"><small>8 h</small></span>
+    <span class="sleep-goal" style="--goal:{{ (8 / sleep_chart.scale)|round(3) }}"><small>8 h</small></span>
     {% for night in sleep_chart.nights %}
     <a class="sleep-col" href="{{ url_for('index', day=night.date) }}" title="{{ night.date }} · {{ night.total|hours if night.total else 'No data' }}">
-      <span class="sleep-stack">{% for part in night.segments|reverse %}<span class="stage-{{ part.key }}" style="height:{{ part.height }}%"></span>{% endfor %}</span>
+      <span class="sleep-stack">{% for part in night.segments|reverse %}<span class="stage-{{ part.key }}" style="--h:{{ part.height }}%"></span>{% endfor %}</span>
       <small>{{ night.label }}</small>
     </a>
     {% endfor %}
   </div>
-  <div class="stage-legend" style="margin-top:10px"><span><i class="stage-deep"></i>Deep</span><span><i class="stage-core"></i>Core</span><span><i class="stage-rem"></i>REM</span></div>
-  <p class="muted" style="margin:8px 0 0">{{ sleep_chart.count }} night{{ "" if sleep_chart.count == 1 else "s" }} recorded. Tap a night to open that day.</p>
-</section>
+  {{ ui.legend([("deep", "Deep"), ("core", "Core"), ("rem", "REM")], "stage") }}
+  <p class="muted mt-2">{{ sleep_chart.count }} night{{ "" if sleep_chart.count == 1 else "s" }} recorded. Tap a night to open that day.</p>
+{% endcall %}
 {% endif %}
 
 {% if activities %}
-<h2 class="section-title">Apple Health workouts</h2>
-<div class="list">
-  {% for entry in activities %}
-  {% if entry.activity is strength and not entry.linked_exercises %}
-  <a class="row" href="{{ url_for('log_page', session=entry.id) }}">
-    <span class="row-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/></svg></span>
-    <div class="row-main"><span class="row-title">{{ entry.activity }}</span>
-      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %} · <span style="color:var(--accent)">Add exercises</span></span></div>
-    {% if entry.active_kcal %}<div class="row-end"><strong>{{ entry.active_kcal|round|int }}</strong>kcal</div>{% endif %}
-  </a>
-  {% else %}
-  <div class="row">
-    <span class="row-icon health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
-    <div class="row-main"><span class="row-title">{{ entry.activity }}</span>
-      <span class="row-sub">{{ entry.date|relative_day }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}{% if entry.linked_exercises %} · {{ entry.linked_exercises }} exercise{{ "" if entry.linked_exercises == 1 else "s" }} logged{% endif %}</span></div>
-    {% if entry.active_kcal %}<div class="row-end"><strong>{{ entry.active_kcal|round|int }}</strong>kcal</div>{% endif %}
-  </div>
-  {% endif %}
-  {% endfor %}
-</div>
+{{ ui.section("Apple Health workouts") }}
+<div class="list">{% for entry in activities %}{{ ui.activity_row(entry) }}{% endfor %}</div>
 {% endif %}
 {% endblock %}

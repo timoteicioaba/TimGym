@@ -1,155 +1,125 @@
 {% extends "base.html" %}
+{% import "components.html" as ui with context %}
 {% block bar_lead %}<span class="eyebrow">{{ day.strftime("%A · %d %B") }}</span>{% endblock %}
 {% block heading %}{{ day|relative_day }}{% endblock %}
 {% block bar_action %}
-<div class="day-nav">
+<div class="bar-actions">
   <a class="bar-action" href="{{ url_for('index', day=previous_day) }}" aria-label="Previous day">‹</a>
   {% if next_day %}<a class="bar-action" href="{{ url_for('index', day=next_day) if next_day != today.isoformat() else url_for('index') }}" aria-label="Next day">›</a>
-  {% else %}<span class="bar-action disabled" aria-hidden="true">›</span>{% endif %}
+  {% else %}<span class="bar-action is-disabled" aria-hidden="true">›</span>{% endif %}
 </div>
 {% endblock %}
 {% block content %}
 
+{# ---------------- Day picker ---------------- #}
 <nav class="day-strip" aria-label="Choose a day">
   {% for item in week %}
+  {% set dot %}<span class="strip-dot{% if item.gym %} is-strength{% elif item.health %} is-activity{% endif %}">{{ item.day }}</span>{% endset %}
   {% if item.future %}
-  <span class="strip-day future"><span>{{ item.label }}</span><span class="strip-dot">{{ item.day }}</span></span>
+  <span class="strip-day is-future"><span>{{ item.label }}</span>{{ dot }}</span>
   {% else %}
-  <a class="strip-day{% if item.selected %} selected{% endif %}{% if item.is_today %} today{% endif %}"
+  <a class="strip-day{% if item.selected %} is-selected{% endif %}{% if item.is_today %} is-today{% endif %}"
      href="{{ url_for('index') if item.is_today else url_for('index', day=item.iso) }}"{% if item.selected %} aria-current="date"{% endif %}>
-    <span>{{ item.label }}</span>
-    <span class="strip-dot{% if item.gym %} gym{% elif item.health %} health{% endif %}">{{ item.day }}</span>
-  </a>
+    <span>{{ item.label }}</span>{{ dot }}</a>
   {% endif %}
   {% endfor %}
 </nav>
 <p class="strip-caption">{{ week_days }} day{{ "" if week_days == 1 else "s" }} active this week{% if week_workout_seconds %} · {{ week_workout_seconds|duration }} of workouts{% endif %}</p>
 
 {# ---------------- Workout ---------------- #}
-<section class="dash">
-  <header class="dash-head">
-    <span class="dash-title"><i class="dash-icon workout"></i>Workout</span>
-    <span class="dash-meta">{% if activity.active_kcal %}{{ "{:,.0f}".format(activity.active_kcal) }} kcal burned{% endif %}{% if activity.active_kcal and activity.steps %} · {% endif %}{% if activity.steps %}{{ "{:,.0f}".format(activity.steps) }} steps{% endif %}</span>
-  </header>
-  {% if sessions %}
+{% set workout_meta %}{% if activity.active_kcal %}{{ "{:,.0f}".format(activity.active_kcal) }} kcal burned{% endif %}{% if activity.active_kcal and activity.steps %} · {% endif %}{% if activity.steps %}{{ "{:,.0f}".format(activity.steps) }} steps{% endif %}{% endset %}
+{% call ui.card("Workout", "workout", workout_meta, compact=True) %}
   {% for entry in sessions[:2] %}
-  <div class="dash-session">
+  <div class="session">
     {% if entry.kind == "gym" %}
     <div class="session-line">
       <strong>{{ entry.health.activity|short_activity if entry.health else "Gym session" }}</strong>
       <span>{% if entry.health and entry.health.duration_s %}{{ entry.health.duration_s|duration }} · {% endif %}{% if entry.health and entry.health.active_kcal %}{{ entry.health.active_kcal|round|int }} kcal · {% endif %}{{ entry.sets }} set{{ "" if entry.sets == 1 else "s" }}</span>
     </div>
-    <ul class="dash-exercises">
+    <ul class="exercise-lines">
       {% for exercise in entry.exercises[:3] %}<li><span>{{ exercise.name }}</span><span>{{ exercise.summary }}</span></li>{% endfor %}
       {% if entry.exercises|length > 3 %}<li class="muted">+{{ entry.exercises|length - 3 }} more</li>{% endif %}
     </ul>
-    {% elif entry.activity is strength %}
-    <div class="session-line">
-      <strong>{{ entry.activity|short_activity }}</strong>
-      <span>{{ entry.started_at|clock }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}{% if entry.active_kcal %} · {{ entry.active_kcal|round|int }} kcal{% endif %}</span>
-    </div>
-    <a class="dash-action" href="{{ url_for('log_page', session=entry.id) }}">Log exercises</a>
     {% else %}
     <div class="session-line">
       <strong>{{ entry.activity|short_activity }}</strong>
-      <span>{% if entry.duration_s %}{{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}{% if entry.active_kcal %} · {{ entry.active_kcal|round|int }} kcal{% endif %}</span>
+      <span>{% if entry.activity is strength %}{{ entry.started_at|clock }} · {% endif %}{% if entry.duration_s %}{{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}{% if entry.active_kcal %} · {{ entry.active_kcal|round|int }} kcal{% endif %}</span>
     </div>
+    {% if entry.activity is strength %}<a class="pill-action" href="{{ url_for('log_page', session=entry.id) }}">Log exercises</a>{% endif %}
     {% endif %}
   </div>
-  {% endfor %}
-  {% if sessions|length > 2 %}<p class="dash-more">+{{ sessions|length - 2 }} more session{{ "" if sessions|length == 3 else "s" }}</p>{% endif %}
   {% else %}
-  <div class="dash-empty"><span>Rest day</span>{% if day == today %}<a class="dash-action" href="{{ url_for('log_page') }}">Log a workout</a>{% endif %}</div>
-  {% endif %}
-</section>
+  <div class="card-empty"><span>Rest day</span>{% if day == today %}<a class="pill-action" href="{{ url_for('log_page') }}">Log a workout</a>{% endif %}</div>
+  {% endfor %}
+  {% if sessions|length > 2 %}<p class="card-more">+{{ sessions|length - 2 }} more session{{ "" if sessions|length == 3 else "s" }}</p>{% endif %}
+{% endcall %}
 
 {# ---------------- Nutrition ---------------- #}
-<section class="dash">
-  <header class="dash-head">
-    <span class="dash-title"><i class="dash-icon nutrition"></i>Nutrition</span>
-    <span class="dash-meta">{% if average_eaten %}7-day avg {{ "{:,}".format(average_eaten) }} kcal{% endif %}</span>
-  </header>
+{% set nutrition_meta %}{% if average_eaten %}7-day avg {{ "{:,}".format(average_eaten) }} kcal{% endif %}{% endset %}
+{% call ui.card("Nutrition", "nutrition", nutrition_meta, compact=True) %}
   {% if eaten or macros %}
-  <div class="dash-row">
-    <div class="dash-figure"><strong>{{ "{:,.0f}".format(eaten) if eaten else "—" }}</strong><small>kcal eaten</small></div>
+  <div class="card-row">
+    <div class="figure"><strong>{{ "{:,.0f}".format(eaten) if eaten else "—" }}</strong><small>kcal eaten</small></div>
     {% if macros %}
-    <div class="macro-mini">
+    <div class="macros">
       {% for item in macros["items"] %}
-      <div><span class="macro-name"><i class="macro-{{ item.key }}"></i>{{ item.label }}</span>
+      <div><span class="macro-name"><i class="swatch macro-{{ item.key }}"></i>{{ item.label }}</span>
         <strong>{{ item.grams|round|int if item.grams is not none else "—" }}<small> g</small></strong>
-        <span class="macro-track"><span class="macro-{{ item.key }}" style="width:{{ item.share }}%"></span></span></div>
+        <span class="track"><span class="macro-{{ item.key }}" style="--share:{{ item.share }}%"></span></span></div>
       {% endfor %}
     </div>
     {% endif %}
   </div>
   {% elif has_nutrition %}
-  <div class="dash-empty"><span>No food logged{{ " yet" if day == today else "" }}</span></div>
+  <div class="card-empty"><span>No food logged{{ " yet" if day == today else "" }}</span></div>
   {% else %}
-  <div class="dash-empty"><span>Add Dietary Energy, Protein, Carbohydrates, and Total Fat to your <a href="{{ url_for('settings') }}#apple-health">Health metrics sync</a>.</span></div>
+  <div class="card-empty"><span>Add Dietary Energy, Protein, Carbohydrates, and Total Fat to your <a href="{{ url_for('settings') }}#apple-health">Health metrics sync</a>.</span></div>
   {% endif %}
-</section>
+{% endcall %}
 
 {# ---------------- Sleep ---------------- #}
-<section class="dash">
-  <header class="dash-head">
-    <span class="dash-title"><i class="dash-icon sleep"></i>Sleep</span>
-    <span class="dash-meta">{% if night and night.sleep_start and night.sleep_end %}{{ night.sleep_start|clock }}–{{ night.sleep_end|clock }}{% elif night %}Night before{% endif %}</span>
-  </header>
+{% set sleep_meta %}{% if night and night.sleep_start and night.sleep_end %}{{ night.sleep_start|clock }}–{{ night.sleep_end|clock }}{% elif night %}Night before{% endif %}{% endset %}
+{% call ui.card("Sleep", "sleep", sleep_meta, compact=True) %}
   {% if night %}
-  <div class="dash-row">
+  <div class="card-row">
     <div class="sleep-main">
-      <div class="dash-figure"><strong>{{ night.total_h|hours }}</strong><small>asleep</small></div>
+      <div class="figure"><strong>{{ night.total_h|hours }}</strong><small>asleep</small></div>
       {% if night.stages %}
-      <div class="stage-bar" role="img" aria-label="Sleep stages">{% for stage in night.stages %}<span class="stage-{{ stage.key }}" style="width:{{ stage.share }}%"></span>{% endfor %}</div>
-      <div class="stage-legend">{% for stage in night.stages %}<span><i class="stage-{{ stage.key }}"></i>{{ stage.label }} {{ stage.hours|hm }}</span>{% endfor %}</div>
+      <div class="stage-bar" role="img" aria-label="Sleep stages">{% for stage in night.stages %}<span class="stage-{{ stage.key }}" style="--share:{{ stage.share }}%"></span>{% endfor %}</div>
+      <div class="legend">{% for stage in night.stages %}<span><i class="swatch stage-{{ stage.key }}"></i>{{ stage.label }} {{ stage.hours|hm }}</span>{% endfor %}</div>
       {% endif %}
     </div>
-    <div class="sleep-week" role="img" aria-label="Hours asleep over the last 7 nights">
-      {% for item in sleep_week %}<div class="sleep-bar{% if item.selected %} selected{% endif %}" title="{{ item.hours|hours if item.hours else 'No data' }}"><span style="height:{{ item.height }}%"></span><small>{{ item.label }}</small></div>{% endfor %}
+    <div class="mini-bars" role="img" aria-label="Hours asleep over the last 7 nights">
+      {% for item in sleep_week %}<div class="mini-bar{% if item.selected %} is-selected{% endif %}" title="{{ item.hours|hours if item.hours else 'No data' }}"><span style="--h:{{ item.height }}%"></span><small>{{ item.label }}</small></div>{% endfor %}
     </div>
   </div>
   {% elif has_sleep %}
-  <div class="dash-empty"><span>No sleep recorded for this night</span></div>
+  <div class="card-empty"><span>No sleep recorded for this night</span></div>
   {% else %}
-  <div class="dash-empty"><span>Add Sleep Analysis to your <a href="{{ url_for('settings') }}#apple-health">Health metrics sync</a>.</span></div>
+  <div class="card-empty"><span>Add Sleep Analysis to your <a href="{{ url_for('settings') }}#apple-health">Health metrics sync</a>.</span></div>
   {% endif %}
-</section>
+{% endcall %}
 
 {# ---------------- Below the fold ---------------- #}
-<h2 class="section-title">Body <a href="{{ url_for('log_page') }}#check-in">Add check-in</a></h2>
-<section class="card">
+{{ ui.section("Body", "Add check-in", url_for('log_page') ~ "#check-in") }}
+{% call ui.card() %}
   {% if body %}
   <div class="body-head">
     <div>
-      <span class="stat-label">Weight · {{ body.date|relative_day }}{% if body.source == "apple_health" %} · Apple Health{% endif %}</span>
-      <div class="stat-value" style="margin:6px 0 2px">{{ "%.1f"|format(body.weight) }}<span class="stat-unit"> kg</span></div>
+      <span class="label">Weight · {{ body.date|relative_day }}{% if body.source == "apple_health" %} · Apple Health{% endif %}</span>
+      <div class="stat-value">{{ "%.1f"|format(body.weight) }}<span class="unit"> kg</span></div>
       {% if body.change is not none %}<span class="stat-note">{% if body.change > 0 %}+{% endif %}{{ "%.1f"|format(body.change) }} kg since previous</span>{% endif %}
     </div>
-    {% if body.body_fat is not none %}<div class="body-side"><div><span class="stat-label">Body fat</span><strong>{{ "%.1f"|format(body.body_fat) }}%</strong></div></div>{% endif %}
+    {% if body.body_fat is not none %}<div class="body-side"><div><span class="label">Body fat</span><strong>{{ "%.1f"|format(body.body_fat) }}%</strong></div></div>{% endif %}
   </div>
   {% if body.sparkline %}<svg class="sparkline" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Weight over the 30 days up to this day"><polyline points="{{ body.sparkline }}"/></svg>{% endif %}
   {% else %}
-  <p class="muted" style="margin:0">No check-ins yet. Add one, or include Weight and Body Fat Percentage in your Health metrics sync.</p>
+  <p class="muted">No check-ins yet. Add one, or include Weight and Body Fat Percentage in your Health metrics sync.</p>
   {% endif %}
-</section>
+{% endcall %}
 
 {% if exercises %}
-<h2 class="section-title">Recent exercises <a href="{{ url_for('progress') }}">Progress</a></h2>
-<div class="list">
-  {% for exercise in exercises %}
-  <a class="row" href="{{ url_for('exercise_history', name=exercise.name) }}">
-    <div class="row-main">
-      <span class="row-title">{{ exercise.name }}</span>
-      <span class="row-sub">{{ exercise.last_date|relative_day }} · {{ exercise.summary }}</span>
-    </div>
-    <div class="row-end">
-      {% if exercise.top %}<strong>{{ exercise.top.weight_kg|kg }} kg</strong>{% endif %}
-      {% if exercise.change is not none and exercise.change != 0 %}<span class="{{ 'trend-up' if exercise.change > 0 else 'trend-down' }}">{{ '▲' if exercise.change > 0 else '▼' }} {{ exercise.change|abs|kg }} kg</span>
-      {% elif exercise.best %}best {{ exercise.best.weight_kg|kg }} kg{% endif %}
-    </div>
-    <span class="chevron" aria-hidden="true"></span>
-  </a>
-  {% endfor %}
-</div>
+{{ ui.section("Recent exercises", "Progress", url_for('progress')) }}
+<div class="list">{% for exercise in exercises %}{{ ui.exercise_row(exercise) }}{% endfor %}</div>
 {% endif %}
 {% endblock %}

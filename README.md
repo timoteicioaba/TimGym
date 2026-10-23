@@ -102,6 +102,10 @@ You can also connect a custom GPT to the workout API using the OpenAPI schema at
 
 The API key grants access only to that person's workouts. Rotating it in TimGym invalidates the old key.
 
+## Working on the interface
+
+Pages are Jinja templates in `templates/`, built from shared components in `templates/components.html` (icons, section titles, cards, list rows, stat tiles, badges, legends). Import them with `{% import "components.html" as ui with context %}`. Styles live in `static/app.css`, organized as tokens (colors, data colors, spacing, radii, type), base, layout, components, page modules, and utilities. Use the tokens and existing components before adding new rules.
+
 ## Data and security
 
 - SQLite is stored in the persistent `gym_data` Docker volume.
