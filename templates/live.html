@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}Live workout · TimGym{% endblock %}
+{% block bar_lead %}<span class="eyebrow">Live · {{ live.activity|short_activity }} · started {{ started_local.strftime("%H:%M") }}</span>{% endblock %}
+{% block heading %}<span id="live-timer" aria-live="off">0:00</span>{% endblock %}
+{% block content %}
+<div class="bento">
+{% call ui.tile("Exercise", "workout", "dumbbell", span=2) %}
+  <input id="live-exercise" list="live-known" maxlength="80" placeholder="Choose or type an exercise" aria-label="Exercise" autocapitalize="words">
+  <datalist id="live-known">{% for name in known_exercises %}<option value="{{ name }}">{% endfor %}</datalist>
+  {% if known_exercises %}<div class="chip-row">{% for name in known_exercises[:12] %}<button class="chip" type="button" data-exercise="{{ name }}">{{ name }}</button>{% endfor %}</div>{% endif %}
+  <div class="steppers">
+    <div class="stepper">
+      <span class="label">Reps</span>
+      <div class="stepper-controls">
+        <button class="secondary" type="button" data-step="reps" data-by="-1" aria-label="One rep fewer">−</button>
+        <input id="live-reps" type="number" inputmode="numeric" min="1" max="999" step="1" value="8" aria-label="Reps">
+        <button class="secondary" type="button" data-step="reps" data-by="1" aria-label="One rep more">+</button>
+      </div>
+    </div>
+    <div class="stepper">
+      <span class="label">Weight · kg</span>
+      <div class="stepper-controls">
+        <button class="secondary" type="button" data-step="weight" data-by="-2.5" aria-label="2.5 kg less">−</button>
+        <input id="live-weight" type="number" inputmode="decimal" min="0" max="2000" step="0.5" placeholder="BW" aria-label="Weight in kg (blank for bodyweight)">
+        <button class="secondary" type="button" data-step="weight" data-by="2.5" aria-label="2.5 kg more">+</button>
+      </div>
+    </div>
+  </div>
+  <button class="full-button" id="live-add" type="button">Add set</button>
+  <div class="live-actions">
+    <button class="secondary small-button" id="live-repeat" type="button">Repeat last set</button>
+    <button class="secondary small-button" id="live-undo" type="button">Undo</button>
+  </div>
+  <p class="tile-empty" id="live-status" role="status" aria-live="polite"></p>
+{% endcall %}
+
+{% call ui.tile("Logged so far", "steps", "chart", span=2) %}
+  <div id="live-log"></div>
+{% endcall %}
+</div>
+
+<form method="post" action="{{ url_for('live_finish', session_id=live.id) }}" class="mt-3">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <button class="full-button" id="live-finish" type="submit">Finish and save</button>
+</form>
+<form method="post" action="{{ url_for('live_discard', session_id=live.id) }}" class="mt-2" onsubmit="return confirm('Discard this live workout? Logged sets will be lost.');">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <button class="danger full-button small-button" type="submit">Discard</button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const live = {
+  csrf: {{ csrf|tojson }},
+  startedAt: new Date({{ live.started_at|tojson }}),
+  urls: {add: {{ url_for('live_add_set', session_id=live.id)|tojson }}, undo: {{ url_for('live_undo', session_id=live.id)|tojson }}},
+  exercises: {{ exercises|tojson }},
+  lastSets: {{ last_sets|tojson }},
+};
+const $ = id => document.getElementById(id);
+const exerciseInput = $("live-exercise"), repsInput = $("live-reps"), weightInput = $("live-weight"), statusLine = $("live-status");
+const exerciseKey = "timgym-live-exercise-" + {{ live.id|tojson }};
+
+function tick() {
+  const seconds = Math.max(0, Math.floor((Date.now() - live.startedAt) / 1000));
+  const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, s = seconds % 60;
+  $("live-timer").textContent = (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+}
+tick();
+const timer = setInterval(() => { if (!document.getElementById("live-timer")) clearInterval(timer); else tick(); }, 1000);
+
+function formatSet(set) {
+  return set.weight_kg === null || set.weight_kg === undefined ? set.reps + " reps" : set.reps + " × " + set.weight_kg + " kg";
+}
+
+function render() {
+  const log = $("live-log");
+  log.replaceChildren();
+  if (!live.exercises.length) {
+    const empty = document.createElement("p");
+    empty.className = "tile-empty";
+    empty.textContent = "No sets yet. Pick an exercise and add your first set.";
+    log.append(empty);
+  }
+  for (const exercise of live.exercises) {
+    const block = document.createElement("div");
+    block.className = "live-exercise";
+    const name = document.createElement("strong");
+    name.textContent = exercise.name;
+    const sets = document.createElement("div");
+    sets.className = "tags";
+    exercise.sets.forEach((set, index) => {
+      const tag = document.createElement("span");
+      tag.className = "tag is-on";
+      tag.textContent = (index + 1) + ". " + formatSet(set);
+      sets.append(tag);
+    });
+    block.append(name, sets);
+    log.append(block);
+  }
+  const total = live.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+  $("live-finish").textContent = total ? "Finish and save · " + total + " set" + (total === 1 ? "" : "s") : "Finish and save";
+  $("live-undo").disabled = !total;
+  $("live-repeat").disabled = !total;
+}
+
+function prefill(name) {
+  // Use this session's last set for the exercise, else the last time you did it.
+  const inSession = live.exercises.find(exercise => exercise.name.toLowerCase() === name.toLowerCase());
+  const last = inSession ? inSession.sets[inSession.sets.length - 1] : live.lastSets[name.toLowerCase()];
+  if (!last) return;
+  repsInput.value = last.reps;
+  weightInput.value = last.weight_kg === null || last.weight_kg === undefined ? "" : last.weight_kg;
+}
+
+function chooseExercise(name) {
+  exerciseInput.value = name;
+  try { localStorage.setItem(exerciseKey, name); } catch (error) {}
+  prefill(name);
+}
+
+async function send(url, body) {
+  statusLine.textContent = "";
+  try {
+    const response = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json", "X-CSRF-Token": live.csrf}, body: JSON.stringify(body || {})});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not save that set.");
+    live.exercises = result.exercises;
+    render();
+    return true;
+  } catch (error) {
+    statusLine.textContent = error.message === "Failed to fetch" ? "No connection. Your set was not saved; try again." : error.message;
+    return false;
+  }
+}
+
+async function addSet(exercise, reps, weight) {
+  if (!exercise) { statusLine.textContent = "Choose an exercise first."; exerciseInput.focus(); return; }
+  if (await send(live.urls.add, {exercise: exercise, reps: reps, weight_kg: weight})) {
+    statusLine.textContent = "Saved " + exercise + " · " + formatSet({reps: Number(reps), weight_kg: weight === "" || weight === null ? null : Number(weight)}) + ".";
+    if (navigator.vibrate) navigator.vibrate(15);
+  }
+}
+
+$("live-add").addEventListener("click", () => addSet(exerciseInput.value.trim(), repsInput.value, weightInput.value === "" ? null : weightInput.value));
+$("live-repeat").addEventListener("click", () => {
+  const exercise = live.exercises[live.exercises.length - 1];
+  if (!exercise) return;
+  const set = exercise.sets[exercise.sets.length - 1];
+  addSet(exercise.name, set.reps, set.weight_kg);
+});
+$("live-undo").addEventListener("click", () => send(live.urls.undo).then(ok => { if (ok) statusLine.textContent = "Removed the last set."; }));
+exerciseInput.addEventListener("change", () => chooseExercise(exerciseInput.value.trim()));
+document.querySelectorAll("[data-exercise]").forEach(chip => chip.addEventListener("click", () => chooseExercise(chip.dataset.exercise)));
+document.querySelectorAll("[data-step]").forEach(button => button.addEventListener("click", () => {
+  const input = button.dataset.step === "reps" ? repsInput : weightInput;
+  const next = Math.max(Number(input.min), (Number(input.value) || 0) + Number(button.dataset.by));
+  input.value = button.dataset.step === "reps" ? Math.round(next) : Math.round(next * 2) / 2;
+}));
+
+try { const remembered = localStorage.getItem(exerciseKey); if (remembered) chooseExercise(remembered); } catch (error) {}
+if (!exerciseInput.value && live.exercises.length) chooseExercise(live.exercises[live.exercises.length - 1].name);
+render();
+</script>
+{% endblock %}

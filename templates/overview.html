@@ -27,6 +27,12 @@
 <p class="strip-caption">{{ week_days }} day{{ "" if week_days == 1 else "s" }} active this week{% if week_workout_seconds %} · {{ week_workout_seconds|duration }} of workouts{% endif %}</p>
 
 <div class="bento">
+{% if live %}
+{% call ui.tile("Workout in progress", "energy", "flame", span=2) %}
+  <div class="tile-cta"><span class="tile-empty">{{ live.activity|short_activity }} · {{ live_sets }} set{{ "" if live_sets == 1 else "s" }} logged</span>
+    <a class="pill-action" href="{{ url_for('live_page', session_id=live.id) }}">Resume</a></div>
+{% endcall %}
+{% endif %}
 {# ---------------- Workout ---------------- #}
 {% call ui.tile("Workout", "workout", "dumbbell", span=2) %}
   {% for entry in sessions[:2] %}

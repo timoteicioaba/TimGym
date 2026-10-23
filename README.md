@@ -96,6 +96,16 @@ Workouts are matched by their Apple Health ID and daily totals replace earlier v
 
 A strength-type Apple Health workout (traditional or functional strength, core, cross training, HIIT) and the exercises you log in TimGym on the same day are shown as one session, with Apple's time and calories next to your sets. Cardio such as runs or elliptical stays a separate entry. If you do two strength sessions in a day, each log is paired with the workout it was saved closest to. Energy in kJ and distances in miles are converted. The endpoint also accepts a simpler JSON shape (see `/openapi.yaml`) for your own Shortcut or script.
 
+## Live workouts from Apple Watch
+
+TimGym can open a live log when you start a strength workout on your Apple Watch and notify your phone, so you add sets as you go.
+
+1. In the installed app (Home Screen, iOS 16.4 or later), open **Settings → Notifications** and tap **Enable on this device**. **Send a test** checks it.
+2. In **Shortcuts → Automation → New Automation → Apple Watch Workout**, choose **Traditional Strength Training**, **Starts**, **Run Immediately**, and add **Get Contents of URL**: `POST https://gym.tim0tei.fun/api/live/start` with the header `Authorization: Bearer YOUR_TIMGYM_KEY`.
+3. Optional: a second automation on **Ends** calling `/api/live/end` reminds you to save.
+
+Tapping the notification opens the live page: pick an exercise (the steppers fill in your last set), then **Add set**, **Repeat last set**, or **Undo**. Every set is saved as you add it. **Finish and save** stores it as a normal workout for that day, which then merges with the Apple Health session. You can also start a live workout from the **Log** tab. Notifications are signed with a key TimGym creates once and stores next to the database (`vapid_private.pem`).
+
 ## Optional: connect a custom GPT Action
 
 You can also connect a custom GPT to the workout API using the OpenAPI schema at `https://gym.tim0tei.fun/openapi.yaml`. Each person's GPT should use their own TimGym key. See OpenAI's [GPT Actions guide](https://developers.openai.com/api/docs/actions/introduction).

@@ -312,3 +312,16 @@ input[type=file]::file-selector-button{margin-right:10px;padding:7px var(--s3);b
 .text-accent{color:var(--accent)}
 .text-warn{color:var(--warn)}
 .text-center{text-align:center}
+
+/* Live workout */
+.steppers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stepper{display:flex;flex-direction:column;gap:6px;min-width:0}
+.stepper-controls{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:6px}
+.stepper-controls button{min-height:50px;padding:0;font-size:1.4rem}
+.stepper-controls input{text-align:center;font-size:1.3rem;font-weight:700;padding:var(--s2) 2px}
+.live-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+.live-actions .small-button{margin-top:0}
+.live-exercise + .live-exercise{margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft)}
+.live-exercise strong{font-size:.95rem}
+.tile-cta{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tile-cta .pill-action{margin-top:0}

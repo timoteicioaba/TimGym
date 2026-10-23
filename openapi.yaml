@@ -24,6 +24,47 @@ paths:
                 required: [username]
         "401":
           description: Missing or invalid API key
+  /api/live/start:
+    post:
+      operationId: startLiveWorkout
+      summary: Start a live strength workout and notify my phone
+      description: >-
+        Meant for an iOS Shortcuts automation that runs when a strength workout starts on Apple Watch.
+        Opens a live logging session (or returns the one already open in the last 4 hours) and sends a
+        push notification that opens it. Body is optional.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                activity: { type: string, description: "Workout name shown on the page, e.g. Traditional Strength Training" }
+      responses:
+        "201":
+          description: A new session was opened
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id: { type: integer }
+                  url: { type: string }
+                  created: { type: boolean }
+                  notified_devices: { type: integer }
+        "200":
+          description: The session already open was returned
+        "401":
+          description: Missing or invalid API key
+  /api/live/end:
+    post:
+      operationId: endLiveWorkout
+      summary: Mark the live workout's watch session as ended and remind me to save it
+      responses:
+        "200":
+          description: Reminder sent, or no live workout was open
+        "401":
+          description: Missing or invalid API key
   /api/health:
     post:
       operationId: importAppleHealth

@@ -69,6 +69,30 @@
   <p class="muted mt-3"><a href="{{ url_for('openapi_spec') }}">API specification</a></p>
 {% endcall %}
 
+{{ ui.section("Notifications", id="notifications") }}
+{% call ui.card() %}
+  <p class="muted card-intro">Lets TimGym tell this phone when a strength workout starts, so you can log sets as you go. On iPhone this works in the installed app (Home Screen), iOS 16.4 or later. {% if push_devices %}<strong>{{ push_devices }} device{{ "" if push_devices == 1 else "s" }} enabled.</strong>{% endif %}</p>
+  <div class="live-actions">
+    <button class="full-button" id="push-enable" type="button">Enable on this device</button>
+    <button class="secondary full-button" id="push-test" type="button"{% if not push_devices %} disabled{% endif %}>Send a test</button>
+  </div>
+  <p class="muted mt-2" id="push-status" role="status" aria-live="polite"></p>
+{% endcall %}
+
+{{ ui.section("Workout shortcut", id="shortcut") }}
+{% call ui.card() %}
+  <p class="muted card-intro">Start a live log automatically when you begin a strength workout on your Apple Watch.</p>
+  <ol class="steps">
+    <li>In the <strong>Shortcuts</strong> app, open <strong>Automation</strong> → <strong>New Automation</strong> → <strong>Apple Watch Workout</strong>.</li>
+    <li>Workout type: <strong>Traditional Strength Training</strong> (and Functional, if you use it). When: <strong>Starts</strong>. Choose <strong>Run Immediately</strong>.</li>
+    <li>Add the action <strong>Get Contents of URL</strong>:
+      <br>URL <code>{{ live_start_url }}</code>
+      <br>Method <strong>POST</strong>, header <code>Authorization</code> = <code>Bearer YOUR_KEY</code></li>
+    <li>Optional: a second automation for when the workout <strong>Ends</strong>, calling <code>{{ live_end_url }}</code> the same way, reminds you to save.</li>
+  </ol>
+  <p class="muted mt-2">When the workout starts you get a notification; tap it to open the live log. You can also start one yourself from the Log tab.</p>
+{% endcall %}
+
 {{ ui.section("Install the app") }}
 {% call ui.card() %}
   <p class="muted">On iPhone, open TimGym in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It opens full screen like an app. Sign in once inside the installed app.</p>
@@ -80,4 +104,54 @@
 {% endcall %}
 
 <form method="post" action="{{ url_for('logout') }}" class="mt-5"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="danger full-button" type="submit">Sign out</button></form>
+{% endblock %}
+{% block scripts %}
+<script>
+const pushKey = {{ vapid_public_key|tojson }};
+const pushCsrf = {{ csrf|tojson }};
+const pushStatus = document.getElementById("push-status");
+
+function keyBytes(base64) {
+  const padded = (base64 + "===".slice((base64.length + 3) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(padded), char => char.charCodeAt(0));
+}
+
+async function postJson(url, body) {
+  const response = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json", "X-CSRF-Token": pushCsrf}, body: JSON.stringify(body || {})});
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Something went wrong.");
+  return result;
+}
+
+document.getElementById("push-enable").addEventListener("click", async () => {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    pushStatus.textContent = "This browser can't receive notifications. On iPhone, open TimGym from its Home Screen icon (iOS 16.4 or later) and try again.";
+    return;
+  }
+  try {
+    if (await Notification.requestPermission() !== "granted") {
+      pushStatus.textContent = "Notifications are blocked. Allow them for TimGym in iPhone Settings → Notifications.";
+      return;
+    }
+    const registration = await navigator.serviceWorker.register("/sw.js", {scope: "/"});
+    await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription()
+      || await registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: keyBytes(pushKey)});
+    await postJson({{ url_for('push_subscribe')|tojson }}, subscription.toJSON());
+    pushStatus.textContent = "Notifications are on for this device.";
+    document.getElementById("push-test").disabled = false;
+  } catch (error) {
+    pushStatus.textContent = "Couldn't enable notifications: " + error.message;
+  }
+});
+
+document.getElementById("push-test").addEventListener("click", async () => {
+  try {
+    const result = await postJson({{ url_for('push_test')|tojson }});
+    pushStatus.textContent = "Sent to " + result.delivered + " device" + (result.delivered === 1 ? "" : "s") + ".";
+  } catch (error) {
+    pushStatus.textContent = error.message;
+  }
+});
+</script>
 {% endblock %}

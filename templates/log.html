@@ -21,6 +21,11 @@
   <p class="muted mt-3" id="workout-ai-status" role="status" aria-live="polite">Write it like a note: “Bench 60x8, 70x6”, “Squat 3x5 @ 100”, “Deadlift 140 for 5”. One exercise per line.</p>
 </section>
 
+<form method="post" action="{{ url_for('live_start') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <button class="secondary full-button" type="submit">Start live workout · log sets as you go</button>
+</form>
+
 <details class="card" id="check-in">
   <summary>Body check-in <span>Weight &amp; measurements</span></summary>
   <form method="post" action="{{ url_for('add_measurement') }}">

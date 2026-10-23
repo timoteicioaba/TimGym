@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
 from health_import import metric_group, normalize_health_payload
+import push
 from workout_parser import parse_workout_note
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -137,6 +138,24 @@ CREATE TABLE IF NOT EXISTS health_imports (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     summary_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS live_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    activity TEXT NOT NULL,
+    started_at TEXT NOT NULL,           -- UTC, ISO 8601
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'finished', 'discarded')),
+    exercises_json TEXT NOT NULL DEFAULT '[]',
+    watch_ended_at TEXT,
+    finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS live_sessions_by_user ON live_sessions (user_id, status);
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS api_tokens (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -639,8 +658,10 @@ def index():
             "sparkline": sparkline([(row["measured_on"], row["weight_kg"]) for row in reversed(body_rows) if row["measured_on"] >= cutoff]),
         }
 
+    live = active_live_session(db, user_id) if day == today else None
     return render_template(
         "overview.html", tab="home", today=today, day=day, week=week,
+        live=live, live_sets=sum(len(e["sets"]) for e in live_exercises(live)) if live else 0,
         previous_day=(day - timedelta(days=1)).isoformat(), next_day=(day + timedelta(days=1)).isoformat() if day < today else None,
         week_days=len(strength_days | other_days), week_workout_seconds=week_minutes * 60,
         average_eaten=average_eaten,
@@ -913,8 +934,11 @@ def render_settings(new_api_key=None):
         groups = {metric_group(name) for name in item.get("metrics_received", [])}
         item["groups"] = [label for key, label in (("activity", "Activity"), ("nutrition", "Nutrition"), ("sleep", "Sleep"), ("body", "Body")) if key in groups]
         imports.append(item)
+    push_devices = db.execute("SELECT COUNT(*) FROM push_subscriptions WHERE user_id = ?", (user_id,)).fetchone()[0]
     return render_template(
         "settings.html", tab="settings", new_api_key=new_api_key, has_key=has_key,
+        push_devices=push_devices, vapid_public_key=push.public_key(vapid_keys()),
+        live_start_url=url_for("api_live_start", _external=True), live_end_url=url_for("api_live_end", _external=True),
         health_url=url_for("api_import_health", _external=True), sync=sync, imports=imports,
     )
 
@@ -1291,6 +1315,290 @@ def server_error(_error):
     if request.path.startswith("/api/"):
         return {"error": "TimGym hit an unexpected error while saving. Check the server logs."}, 500
     return "Something went wrong.", 500
+
+
+# ---------------------------------------------------------------------------
+# Live workouts: a Shortcut (Apple Watch workout starts) or the Log page opens a
+# session; the phone gets a push notification that opens /live/<id>, where sets
+# are added as you go and saved as a normal workout at the end.
+
+LIVE_REUSE_WINDOW = timedelta(hours=4)
+
+
+def vapid_keys():
+    if "vapid" not in g:
+        g.vapid = push.load_or_create_vapid(DB_PATH.parent)
+    return g.vapid
+
+
+def notify(user_id, payload):
+    """Send a push to every device the user enabled; forget ones that are gone."""
+    db = get_db()
+    subscriptions = db.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?", (user_id,)).fetchall()
+    if not subscriptions:
+        return 0
+    delivered, gone = push.send(vapid_keys(), [dict(row) for row in subscriptions], payload, request.host_url.rstrip("/"))
+    if gone:
+        db.executemany("DELETE FROM push_subscriptions WHERE endpoint = ?", [(endpoint,) for endpoint in gone])
+        db.commit()
+    return delivered
+
+
+def utc_now():
+    return datetime.now(timezone.utc).replace(microsecond=0)
+
+
+def active_live_session(db, user_id):
+    """The user's live session started within the reuse window, if any."""
+    cutoff = (utc_now() - LIVE_REUSE_WINDOW).isoformat()
+    return db.execute(
+        "SELECT * FROM live_sessions WHERE user_id = ? AND status = 'active' AND started_at >= ? ORDER BY id DESC LIMIT 1",
+        (user_id, cutoff),
+    ).fetchone()
+
+
+def start_live_session(db, user_id, activity):
+    """Return (session, created). An active session is reused so a Shortcut firing
+    twice, or a manual start during a watch workout, doesn't split the log."""
+    existing = active_live_session(db, user_id)
+    if existing:
+        return existing, False
+    cursor = db.execute(
+        "INSERT INTO live_sessions (user_id, activity, started_at) VALUES (?, ?, ?)",
+        (user_id, activity, utc_now().isoformat()),
+    )
+    db.commit()
+    return db.execute("SELECT * FROM live_sessions WHERE id = ?", (cursor.lastrowid,)).fetchone(), True
+
+
+def owned_live_session(session_id):
+    row = get_db().execute(
+        "SELECT * FROM live_sessions WHERE id = ? AND user_id = ?", (session_id, g.user["id"])
+    ).fetchone()
+    if row is None:
+        abort(404)
+    return row
+
+
+def live_exercises(row):
+    return json.loads(row["exercises_json"])
+
+
+def save_live_exercises(session_id, exercises):
+    db = get_db()
+    db.execute("UPDATE live_sessions SET exercises_json = ? WHERE id = ?", (json.dumps(exercises), session_id))
+    db.commit()
+
+
+def last_sets_by_exercise(user_id):
+    """Each exercise's last logged set, to prefill the steppers."""
+    last = {}
+    for row in get_db().execute(
+        "SELECT exercise, sets_json, reps, weight_kg, sets FROM workouts WHERE user_id = ? ORDER BY workout_date DESC, id DESC LIMIT 300",
+        (user_id,),
+    ):
+        key = row["exercise"].casefold()
+        if key not in last:
+            sets = row_sets(row)
+            if sets:
+                last[key] = {"reps": sets[-1]["reps"], "weight_kg": sets[-1].get("weight_kg")}
+    return last
+
+
+@app.post("/api/live/start")
+@api_key_required
+def api_live_start():
+    payload = request.get_json(force=True, silent=True) or {}
+    activity = str(payload.get("activity") or "Strength training").strip()[:80] or "Strength training"
+    db = get_db()
+    session_row, created = start_live_session(db, g.api_user["id"], activity)
+    url = url_for("live_page", session_id=session_row["id"], _external=True)
+    delivered = 0
+    if created:
+        delivered = notify(g.api_user["id"], {
+            "title": f"{activity} started",
+            "body": "Tap to log your sets as you go.",
+            "url": url_for("live_page", session_id=session_row["id"]),
+            "tag": f"live-{session_row['id']}",
+        })
+    return {"session_id": session_row["id"], "url": url, "created": created, "notified_devices": delivered}, 201 if created else 200
+
+
+@app.post("/api/live/end")
+@api_key_required
+def api_live_end():
+    db = get_db()
+    session_row = active_live_session(db, g.api_user["id"])
+    if session_row is None:
+        return {"session_id": None, "message": "No live workout is open."}
+    db.execute("UPDATE live_sessions SET watch_ended_at = ? WHERE id = ?", (utc_now().isoformat(), session_row["id"]))
+    db.commit()
+    count = sum(len(exercise["sets"]) for exercise in live_exercises(session_row))
+    delivered = notify(g.api_user["id"], {
+        "title": "Workout finished on your watch",
+        "body": f"Save your {count} logged set{'' if count == 1 else 's'}." if count else "Add your sets and save the workout.",
+        "url": url_for("live_page", session_id=session_row["id"]),
+        "tag": f"live-{session_row['id']}",
+    })
+    return {"session_id": session_row["id"], "sets_logged": count, "notified_devices": delivered}
+
+
+@app.post("/live/start")
+@login_required
+def live_start():
+    if not valid_csrf():
+        abort(400)
+    session_row, _created = start_live_session(get_db(), g.user["id"], "Strength training")
+    return redirect(url_for("live_page", session_id=session_row["id"]))
+
+
+@app.get("/live")
+@login_required
+def live_current():
+    session_row = active_live_session(get_db(), g.user["id"])
+    return redirect(url_for("live_page", session_id=session_row["id"]) if session_row else url_for("log_page"))
+
+
+@app.get("/live/<int:session_id>")
+@login_required
+def live_page(session_id):
+    session_row = owned_live_session(session_id)
+    if session_row["status"] != "active":
+        flash("That workout is already " + ("saved." if session_row["status"] == "finished" else "discarded."))
+        return redirect(url_for("index"))
+    started = datetime.fromisoformat(session_row["started_at"])
+    return render_template(
+        "live.html", tab="log", live=session_row, exercises=live_exercises(session_row),
+        started_local=started.astimezone(LOCAL_TZ) if LOCAL_TZ else started,
+        known_exercises=known_exercise_names(g.user["id"])[:20], last_sets=last_sets_by_exercise(g.user["id"]),
+    )
+
+
+@app.post("/live/<int:session_id>/sets")
+@login_required
+def live_add_set(session_id):
+    if not valid_csrf():
+        return {"error": "Your session expired. Refresh the page and try again."}, 400
+    session_row = owned_live_session(session_id)
+    if session_row["status"] != "active":
+        return {"error": "This workout is no longer open."}, 409
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get("exercise", "")).strip()[:80]
+    try:
+        reps = int(payload.get("reps"))
+        weight = number(payload.get("weight_kg"), "Weight", 2000)
+    except (TypeError, ValueError):
+        return {"error": "Enter reps as a whole number and weight in kg."}, 400
+    if not name or not 1 <= reps <= 999:
+        return {"error": "Choose an exercise and enter 1–999 reps."}, 400
+    exercises = live_exercises(session_row)
+    if len(exercises) >= 30 and not any(e["name"].casefold() == name.casefold() for e in exercises):
+        return {"error": "A workout can hold up to 30 exercises."}, 400
+    # Sets for an exercise done earlier in the session join that exercise's list.
+    target = next((e for e in exercises if e["name"].casefold() == name.casefold()), None)
+    if target is None:
+        target = {"name": name, "sets": []}
+        exercises.append(target)
+    if len(target["sets"]) >= 99:
+        return {"error": "That exercise already has 99 sets."}, 400
+    target["sets"].append({"reps": reps, "weight_kg": weight})
+    # The most recent exercise moves last, so "undo" and the list follow the order you train.
+    exercises.remove(target)
+    exercises.append(target)
+    save_live_exercises(session_id, exercises)
+    return {"exercises": exercises}
+
+
+@app.post("/live/<int:session_id>/undo")
+@login_required
+def live_undo(session_id):
+    if not valid_csrf():
+        return {"error": "Your session expired. Refresh the page and try again."}, 400
+    session_row = owned_live_session(session_id)
+    exercises = live_exercises(session_row)
+    if exercises:
+        exercises[-1]["sets"].pop()
+        if not exercises[-1]["sets"]:
+            exercises.pop()
+        save_live_exercises(session_id, exercises)
+    return {"exercises": exercises}
+
+
+@app.post("/live/<int:session_id>/finish")
+@login_required
+def live_finish(session_id):
+    if not valid_csrf():
+        abort(400)
+    session_row = owned_live_session(session_id)
+    if session_row["status"] != "active":
+        return redirect(url_for("index"))
+    db = get_db()
+    exercises = live_exercises(session_row)
+    started = datetime.fromisoformat(session_row["started_at"])
+    workout_day = (started.astimezone(LOCAL_TZ) if LOCAL_TZ else started).date()
+    if exercises:
+        workout_date, normalized = normalize_workout_payload({"date": workout_day.isoformat(), "exercises": exercises})
+        persist_workout(workout_date, normalized, g.user["id"])
+        flash(f"Workout saved: {len(normalized)} exercise{'' if len(normalized) == 1 else 's'}, "
+              f"{sum(len(e['sets']) for e in normalized)} sets.")
+    db.execute(
+        "UPDATE live_sessions SET status = ?, finished_at = ? WHERE id = ?",
+        ("finished" if exercises else "discarded", utc_now().isoformat(), session_id),
+    )
+    db.commit()
+    return redirect(url_for("index") if workout_day == local_today() else url_for("index", day=workout_day.isoformat()))
+
+
+@app.post("/live/<int:session_id>/discard")
+@login_required
+def live_discard(session_id):
+    if not valid_csrf():
+        abort(400)
+    owned_live_session(session_id)
+    db = get_db()
+    db.execute("UPDATE live_sessions SET status = 'discarded', finished_at = ? WHERE id = ?", (utc_now().isoformat(), session_id))
+    db.commit()
+    flash("Live workout discarded.")
+    return redirect(url_for("index"))
+
+
+@app.post("/push/subscribe")
+@login_required
+def push_subscribe():
+    if not valid_csrf():
+        return {"error": "Your session expired. Refresh the page and try again."}, 400
+    payload = request.get_json(silent=True) or {}
+    endpoint = str(payload.get("endpoint", ""))
+    keys = payload.get("keys") or {}
+    if not endpoint.startswith("https://") or not keys.get("p256dh") or not keys.get("auth"):
+        return {"error": "That subscription is incomplete."}, 400
+    db = get_db()
+    db.execute(
+        """INSERT INTO push_subscriptions (endpoint, user_id, p256dh, auth) VALUES (?, ?, ?, ?)
+           ON CONFLICT (endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth""",
+        (endpoint[:1000], g.user["id"], str(keys["p256dh"])[:200], str(keys["auth"])[:100]),
+    )
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/push/test")
+@login_required
+def push_test():
+    if not valid_csrf():
+        return {"error": "Your session expired. Refresh the page and try again."}, 400
+    delivered = notify(g.user["id"], {"title": "TimGym", "body": "Notifications are working.", "url": url_for("index")})
+    if not delivered:
+        return {"error": "No device received it. Enable notifications on this device first."}, 404
+    return {"delivered": delivered}
+
+
+@app.get("/sw.js")
+def service_worker():
+    # Served from the root so it can handle notifications for every page.
+    response = send_file(Path(app.static_folder) / "sw.js", mimetype="text/javascript", max_age=0)
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
 
 
 @app.get("/api/me")

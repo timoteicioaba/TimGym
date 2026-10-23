@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && mkdir -p /data \
     && chown appuser:appuser /data
 
-COPY app.py workout_parser.py health_import.py openapi.yaml ./
+COPY app.py workout_parser.py health_import.py push.py openapi.yaml ./
 COPY templates ./templates
 COPY static ./static
 USER appuser
