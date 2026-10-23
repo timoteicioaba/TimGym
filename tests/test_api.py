@@ -110,7 +110,7 @@ class HealthEndpointTests(unittest.TestCase):
         self.login()
         page = self.client.get("/").get_data(as_text=True)
         self.assertIn("2,150", page)
-        self.assertIn("160<small> g</small>", page)
+        self.assertIn("160<small>g</small>", page)
         self.assertIn("81.4", page)
 
     def test_a_chosen_day_shows_its_own_food_and_sleep(self):
@@ -136,9 +136,9 @@ class HealthEndpointTests(unittest.TestCase):
         page = self.client.get(f"/?day={yesterday}").get_data(as_text=True)
         self.assertIn("Yesterday</h1>", page)
         self.assertIn("2,000", page)              # 8368 kJ
-        self.assertIn("150<small> g</small>", page)
+        self.assertIn("150<small>g</small>", page)
         self.assertIn("--share:28%", page)        # protein: 150 g × 4 = 600 of 2,120 kcal
-        self.assertIn("6 h 30 min", page)
+        self.assertIn("6h 30m", page)
         self.assertIn("00:30–07:15", page)
         self.assertIn("Deep 1h 00m", page)
         settings = self.client.get("/settings").get_data(as_text=True)

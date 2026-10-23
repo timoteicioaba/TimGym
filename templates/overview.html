@@ -26,9 +26,9 @@
 </nav>
 <p class="strip-caption">{{ week_days }} day{{ "" if week_days == 1 else "s" }} active this week{% if week_workout_seconds %} · {{ week_workout_seconds|duration }} of workouts{% endif %}</p>
 
+<div class="bento">
 {# ---------------- Workout ---------------- #}
-{% set workout_meta %}{% if activity.active_kcal %}{{ "{:,.0f}".format(activity.active_kcal) }} kcal burned{% endif %}{% if activity.active_kcal and activity.steps %} · {% endif %}{% if activity.steps %}{{ "{:,.0f}".format(activity.steps) }} steps{% endif %}{% endset %}
-{% call ui.card("Workout", "workout", workout_meta, compact=True) %}
+{% call ui.tile("Workout", "workout", "dumbbell", span=2) %}
   {% for entry in sessions[:2] %}
   <div class="session">
     {% if entry.kind == "gym" %}
@@ -55,68 +55,60 @@
 {% endcall %}
 
 {# ---------------- Nutrition ---------------- #}
-{% set nutrition_meta %}{% if average_eaten %}7-day avg {{ "{:,}".format(average_eaten) }} kcal{% endif %}{% endset %}
-{% call ui.card("Nutrition", "nutrition", nutrition_meta, compact=True) %}
+{% call ui.tile("Nutrition", "nutrition", "food") %}
   {% if eaten or macros %}
-  <div class="card-row">
-    <div class="figure"><strong>{{ "{:,.0f}".format(eaten) if eaten else "—" }}</strong><small>kcal eaten</small></div>
-    {% if macros %}
-    <div class="macros">
-      {% for item in macros["items"] %}
-      <div><span class="macro-name"><i class="swatch macro-{{ item.key }}"></i>{{ item.label }}</span>
-        <strong>{{ item.grams|round|int if item.grams is not none else "—" }}<small> g</small></strong>
-        <span class="track"><span class="macro-{{ item.key }}" style="--share:{{ item.share }}%"></span></span></div>
-      {% endfor %}
-    </div>
-    {% endif %}
+  <div class="figure"><strong>{{ "{:,.0f}".format(eaten) if eaten else "—" }}</strong><small>kcal eaten{% if average_eaten %} · avg {{ "{:,}".format(average_eaten) }}{% endif %}</small></div>
+  {% if macros %}
+  <div class="stage-bar" role="img" aria-label="Share of calories from protein, carbs, and fat">{% for item in macros["items"] %}<span class="macro-{{ item.key }}" style="--share:{{ item.share }}%"></span>{% endfor %}</div>
+  <div class="tile-stats">
+    {% for item in macros["items"] %}<div><span class="macro-name"><i class="swatch macro-{{ item.key }}"></i>{{ item.label[0] }}</span><strong>{{ item.grams|round|int if item.grams is not none else "—" }}<small>g</small></strong></div>{% endfor %}
   </div>
+  {% endif %}
   {% elif has_nutrition %}
-  <div class="card-empty"><span>No food logged{{ " yet" if day == today else "" }}</span></div>
+  <p class="tile-empty">No food logged{{ " yet" if day == today else "" }}</p>
   {% else %}
-  <div class="card-empty"><span>Add Dietary Energy, Protein, Carbohydrates, and Total Fat to your <a href="{{ url_for('settings') }}#apple-health">Health metrics sync</a>.</span></div>
+  <p class="tile-empty">Add nutrition to your <a href="{{ url_for('settings') }}#apple-health">Health sync</a></p>
   {% endif %}
 {% endcall %}
 
 {# ---------------- Sleep ---------------- #}
-{% set sleep_meta %}{% if night and night.sleep_start and night.sleep_end %}{{ night.sleep_start|clock }}–{{ night.sleep_end|clock }}{% elif night %}Night before{% endif %}{% endset %}
-{% call ui.card("Sleep", "sleep", sleep_meta, compact=True) %}
+{% call ui.tile("Sleep", "sleep", "moon") %}
   {% if night %}
-  <div class="card-row">
-    <div class="sleep-main">
-      <div class="figure"><strong>{{ night.total_h|hours }}</strong><small>asleep</small></div>
-      {% if night.stages %}
-      <div class="stage-bar" role="img" aria-label="Sleep stages">{% for stage in night.stages %}<span class="stage-{{ stage.key }}" style="--share:{{ stage.share }}%"></span>{% endfor %}</div>
-      <div class="legend">{% for stage in night.stages %}<span><i class="swatch stage-{{ stage.key }}"></i>{{ stage.label }} {{ stage.hours|hm }}</span>{% endfor %}</div>
-      {% endif %}
-    </div>
-    <div class="mini-bars" role="img" aria-label="Hours asleep over the last 7 nights">
-      {% for item in sleep_week %}<div class="mini-bar{% if item.selected %} is-selected{% endif %}" title="{{ item.hours|hours if item.hours else 'No data' }}"><span style="--h:{{ item.height }}%"></span><small>{{ item.label }}</small></div>{% endfor %}
-    </div>
+  <div class="figure"><strong>{{ night.total_h|hm }}</strong><small>{% if night.sleep_start and night.sleep_end %}{{ night.sleep_start|clock }}–{{ night.sleep_end|clock }}{% else %}asleep{% endif %}</small></div>
+  {% if night.stages %}<div class="stage-bar" role="img" aria-label="Sleep stages: {% for stage in night.stages %}{{ stage.label }} {{ stage.hours|hm }}{{ ", " if not loop.last }}{% endfor %}">{% for stage in night.stages %}<span class="stage-{{ stage.key }}" style="--share:{{ stage.share }}%"></span>{% endfor %}</div>{% endif %}
+  <div class="mini-bars" role="img" aria-label="Hours asleep over the last 7 nights">
+    {% for item in sleep_week %}<div class="mini-bar{% if item.selected %} is-selected{% endif %}" title="{{ item.hours|hours if item.hours else 'No data' }}"><span style="--h:{{ item.height }}%"></span><small>{{ item.label }}</small></div>{% endfor %}
   </div>
   {% elif has_sleep %}
-  <div class="card-empty"><span>No sleep recorded for this night</span></div>
+  <p class="tile-empty">No sleep recorded for this night</p>
   {% else %}
-  <div class="card-empty"><span>Add Sleep Analysis to your <a href="{{ url_for('settings') }}#apple-health">Health metrics sync</a>.</span></div>
+  <p class="tile-empty">Add Sleep Analysis to your <a href="{{ url_for('settings') }}#apple-health">Health sync</a></p>
   {% endif %}
 {% endcall %}
 
-{# ---------------- Below the fold ---------------- #}
-{{ ui.section("Body", "Add check-in", url_for('log_page') ~ "#check-in") }}
-{% call ui.card() %}
+{# ---------------- Activity ---------------- #}
+{% call ui.tile("Steps", "steps", "steps") %}
+  <div class="figure figure--small"><strong>{{ "{:,.0f}".format(activity.steps) if activity.steps else "—" }}</strong><small>steps</small></div>
+{% endcall %}
+{% call ui.tile("Burned", "energy", "flame") %}
+  <div class="figure figure--small"><strong>{{ "{:,.0f}".format(activity.active_kcal) if activity.active_kcal else "—" }}</strong><small>active kcal</small></div>
+{% endcall %}
+
+{# ---------------- Body (below the fold) ---------------- #}
+{% call ui.tile("Body", "body", "scale", span=2) %}
   {% if body %}
   <div class="body-head">
-    <div>
-      <span class="label">Weight · {{ body.date|relative_day }}{% if body.source == "apple_health" %} · Apple Health{% endif %}</span>
-      <div class="stat-value">{{ "%.1f"|format(body.weight) }}<span class="unit"> kg</span></div>
-      {% if body.change is not none %}<span class="stat-note">{% if body.change > 0 %}+{% endif %}{{ "%.1f"|format(body.change) }} kg since previous</span>{% endif %}
-    </div>
-    {% if body.body_fat is not none %}<div class="body-side"><div><span class="label">Body fat</span><strong>{{ "%.1f"|format(body.body_fat) }}%</strong></div></div>{% endif %}
+    <div class="figure"><strong>{{ "%.1f"|format(body.weight) }}<span class="unit"> kg</span></strong>
+      <small>{{ body.date|relative_day }}{% if body.change is not none %} · {% if body.change > 0 %}+{% endif %}{{ "%.1f"|format(body.change) }} kg since previous{% endif %}</small></div>
+    {% if body.body_fat is not none %}<div class="figure figure--right"><strong>{{ "%.1f"|format(body.body_fat) }}<span class="unit">%</span></strong><small>body fat</small></div>{% endif %}
   </div>
   {% if body.sparkline %}<svg class="sparkline" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Weight over the 30 days up to this day"><polyline points="{{ body.sparkline }}"/></svg>{% endif %}
+  <a class="tile-link" href="{{ url_for('log_page') }}#check-in">Add check-in</a>
   {% else %}
-  <p class="muted">No check-ins yet. Add one, or include Weight and Body Fat Percentage in your Health metrics sync.</p>
+  <p class="tile-empty">No check-ins yet. <a href="{{ url_for('log_page') }}#check-in">Add one</a>, or sync Weight and Body Fat from Apple Health.</p>
   {% endif %}
 {% endcall %}
+</div>
 
 {% if exercises %}
 {{ ui.section("Recent exercises", "Progress", url_for('progress')) }}

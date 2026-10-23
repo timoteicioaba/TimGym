@@ -8,6 +8,11 @@
 {%- elif name == "gear" %}<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
 {%- elif name == "dumbbell" %}<path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/>
 {%- elif name == "pulse" %}<path d="M3 12h4l3-8 4 16 3-8h4"/>
+{%- elif name == "flame" %}<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 1.6 1.2 2.5 2.5 2.5C11 8 11.5 5.5 12 3z"/>
+{%- elif name == "steps" %}<path d="M8 4c1.7 0 2.5 1.8 2.5 4S9.5 13 8 13 5.5 10.2 5.5 8 6.3 4 8 4zM6 16.5h4M16 9c1.7 0 2.5 1.8 2.5 4s-1 5-2.5 5-2.5-2.8-2.5-5 .8-4 2.5-4zM14 21h4"/>
+{%- elif name == "food" %}<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-1.7 0-3 2-3 5s1.3 4 3 4v9"/>
+{%- elif name == "moon" %}<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>
+{%- elif name == "scale" %}<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 9.5a5 5 0 0 1 7 0L13 12"/>
 {%- endif %}</svg>
 {%- endmacro %}
 
@@ -17,17 +22,26 @@
   {%- if href %}<a href="{{ href }}">{{ aside }}</a>{% elif aside %}<span>{{ aside }}</span>{% endif %}</h2>
 {%- endmacro %}
 
-{# A card. compact=True gives the dense Today cards a titled header with a colored dot. #}
-{% macro card(title=none, tone=none, meta=none, compact=False, id=none, tag="section") -%}
-<{{ tag }} class="card{% if compact %} card--compact{% endif %}"{% if id %} id="{{ id }}"{% endif %}>
+{# The base container; an optional title adds a header row. #}
+{% macro card(title=none, meta=none, id=none, tag="section") -%}
+<{{ tag }} class="card"{% if id %} id="{{ id }}"{% endif %}>
   {%- if title %}
-  <header class="card-head">
-    <span class="card-title">{% if tone %}<i class="dot dot--{{ tone }}"></i>{% endif %}{{ title }}</span>
-    {%- if meta %}<span class="card-meta">{{ meta }}</span>{% endif %}
-  </header>
+  <header class="card-head"><span class="card-title">{{ title }}</span>{% if meta %}<span class="card-meta">{{ meta }}</span>{% endif %}</header>
   {%- endif %}
   {{ caller() }}
 </{{ tag }}>
+{%- endmacro %}
+
+{# A dashboard tile: tinted icon, title, optional meta, then content. span=2 fills the row. #}
+{% macro tile(title, tone, glyph, meta=none, span=1, href=none) -%}
+<{{ "a" if href else "section" }} class="tile tile--{{ tone }}{% if span == 2 %} tile--wide{% endif %}"{% if href %} href="{{ href }}"{% endif %}>
+  <header class="tile-head">
+    <span class="tile-icon">{{ icon(glyph) }}</span>
+    <span class="tile-title">{{ title }}</span>
+    {%- if meta %}<span class="tile-meta">{{ meta }}</span>{% endif %}
+  </header>
+  {{ caller() }}
+</{{ "a" if href else "section" }}>
 {%- endmacro %}
 
 {% macro badge(text="Apple Health") -%}<span class="badge">{{ text }}</span>{%- endmacro %}

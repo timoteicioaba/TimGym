@@ -23,6 +23,7 @@
   --protein:#75c8ff;--carbs:#c7f36a;--fat:#ffb35c;
   --deep:#5b4bd6;--core:#8f86ff;--rem:#5ec8ff;--awake:#ff9c8a;--sleep:#a99cff;--sleep-dim:#3c3778;
   --range-1:#c7f36a;--range-2:#75c8ff;--range-3:#c69cff;
+  --energy:#ff8a65;--body:#5fd3b0;
   /* Spacing, radii, type */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;
   --r-sm:10px;--r-md:14px;--r-lg:18px;--r-pill:999px;
@@ -94,13 +95,10 @@ code{font:.84em var(--mono);color:var(--accent);background:var(--surface-sunken)
 
 /* Card: the base container. --compact is the dense, titled variant used on Today. */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s4);margin:10px 0}
-.card--compact{padding:11px 14px var(--s3);margin:var(--s2) 0}
 .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:7px}
 .card-title{display:flex;align-items:center;gap:7px;font-size:.78rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--text-2)}
 .card-meta{color:var(--muted);font-size:.74rem;text-align:right}
 .card > .card-intro{margin-bottom:var(--s3)}
-.dot{width:var(--s2);height:var(--s2);border-radius:50%}
-.dot--workout{background:var(--accent)}.dot--nutrition{background:var(--fat)}.dot--sleep{background:var(--sleep)}
 details.card > summary{list-style:none;display:flex;justify-content:space-between;align-items:center;cursor:pointer;min-height:30px;font-weight:700}
 details.card > summary::-webkit-details-marker{display:none}
 details.card > summary::after{content:"＋";color:var(--accent);font-size:1.2rem}
@@ -215,7 +213,33 @@ input[type=file]::file-selector-button{margin-right:10px;padding:7px var(--s3);b
 .strip-day.is-selected .strip-dot{border-color:var(--text)}
 .strip-caption{margin:var(--s1) 2px var(--s2);color:var(--muted);font-size:.74rem;text-align:center}
 
-/* Today: workout card */
+/* Today: tiles. Each tile sets --tone; the tint, icon chip, and accents follow it. */
+.bento{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:var(--s2) 0}
+.tile{--tone:var(--accent);display:flex;flex-direction:column;gap:var(--s2);min-width:0;padding:var(--s3) 14px 13px;border-radius:var(--r-lg);border:1px solid var(--line);color:var(--text);
+  background:linear-gradient(160deg,color-mix(in srgb,var(--tone) 10%,var(--surface)) 0%,var(--surface) 60%)}
+.tile--wide{grid-column:1 / -1}
+.tile--workout{--tone:var(--accent)}.tile--nutrition{--tone:var(--fat)}.tile--sleep{--tone:var(--sleep)}
+.tile--steps{--tone:var(--info)}.tile--energy{--tone:var(--energy)}.tile--body{--tone:var(--body)}
+.tile-head{display:flex;align-items:center;gap:var(--s2);min-width:0}
+.tile-icon{flex:0 0 26px;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--s2);background:color-mix(in srgb,var(--tone) 18%,transparent);color:var(--tone)}
+.tile-icon .icon{width:16px;height:16px;stroke-width:2.2}
+.tile-title{font-size:.84rem;font-weight:700;color:var(--text-2)}
+.tile-meta{margin-left:auto;color:var(--muted);font-size:.74rem;text-align:right}
+.tile .figure strong{font-size:1.55rem}
+.tile .figure--small strong{font-size:1.3rem}
+.figure--right{align-items:flex-end;text-align:right}
+.tile .stage-bar{margin-top:0}
+.tile-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s1)}
+.tile-stats > div{display:flex;flex-direction:column}
+.tile-stats strong{font-size:.95rem}
+.tile-stats strong small{color:var(--muted);font-weight:500;font-size:.68rem;margin-left:1px}
+.macro-name{display:flex;align-items:center;color:var(--muted);font-size:.7rem;font-weight:650}
+.tile .mini-bars{grid-template-columns:repeat(7,minmax(0,1fr));gap:var(--s1);height:44px}
+.tile .mini-bar span{width:100%;max-width:12px}
+.tile-empty{color:var(--muted);font-size:.82rem}
+.tile-link{align-self:flex-start;font-size:var(--fs-sm);font-weight:600}
+
+/* Today: workout tile */
 .session + .session{margin-top:var(--s2);padding-top:var(--s2);border-top:1px solid var(--line-soft)}
 .session-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .session-line strong{font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -226,19 +250,9 @@ input[type=file]::file-selector-button{margin-right:10px;padding:7px var(--s3);b
 .card-empty{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-size:.86rem}
 .card-empty .pill-action{margin-top:0}
 .card-more{margin-top:6px;color:var(--muted);font-size:.76rem}
-.card-row{display:flex;align-items:flex-end;justify-content:space-between;gap:14px}
 
-/* Today: nutrition */
-.macros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;flex:1;max-width:230px}
-.macros > div{display:flex;flex-direction:column;gap:2px}
-.macros strong{font-size:var(--fs-base)}
-.macros strong small{color:var(--muted);font-weight:500;font-size:.7rem}
-.macro-name{display:flex;align-items:center;color:var(--muted);font-size:.74rem;font-weight:650}
-.track{display:block;height:4px;border-radius:var(--r-pill);background:var(--line-soft);overflow:hidden}
-.track span{display:block;height:100%;width:var(--share);border-radius:var(--r-pill)}
 
 /* Today and Progress: sleep */
-.sleep-main{flex:1;min-width:0}
 .stage-bar{display:flex;height:var(--s2);margin-top:var(--s2);border-radius:var(--r-pill);overflow:hidden;background:var(--line-soft)}
 .stage-bar span{width:var(--share)}
 .mini-bars{display:grid;grid-template-columns:repeat(7,10px);gap:5px;align-items:end;height:66px}
