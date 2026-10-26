@@ -24,6 +24,8 @@
   --deep:#5b4bd6;--core:#8f86ff;--rem:#5ec8ff;--awake:#ff9c8a;--sleep:#a99cff;--sleep-dim:#3c3778;
   --range-1:#c7f36a;--range-2:#75c8ff;--range-3:#c69cff;
   --energy:#ff8a65;--body:#5fd3b0;
+  /* Muscle groups (day type breakdown) */
+  --g-legs:#c7f36a;--g-chest:#ff8a65;--g-back:#75c8ff;--g-shoulders:#c69cff;--g-arms:#ffb35c;--g-core:#5fd3b0;
   /* Spacing, radii, type */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;
   --r-sm:10px;--r-md:14px;--r-lg:18px;--r-pill:999px;
@@ -342,3 +344,14 @@ input[type=file]::file-selector-button{margin-right:10px;padding:7px var(--s3);b
 .catalog-results small{display:block;color:var(--muted);font-weight:500;font-size:.74rem}
 .exercise-lines li > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .exercise-lines li > span:last-child{flex:0 0 auto}
+
+/* Day workout page and session links */
+.group-legs{background:var(--g-legs)}.group-chest{background:var(--g-chest)}.group-back{background:var(--g-back)}
+.group-shoulders{background:var(--g-shoulders)}.group-arms{background:var(--g-arms)}.group-core{background:var(--g-core)}
+.session-link{color:var(--text)}
+.session-link:active{opacity:.7}
+.day-exercises{display:flex;flex-direction:column}
+.day-exercise{padding:10px 0}
+.day-exercise + .day-exercise{border-top:1px solid var(--line-soft)}
+.day-exercise-head{display:flex;align-items:center;gap:var(--s3);color:var(--text)}
+.day-exercise .tags{margin-top:var(--s2)}

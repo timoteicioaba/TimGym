@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "components.html" as ui with context %}
+{% block title %}Workout · {{ day.isoformat() }} · TimGym{% endblock %}
+{% block bar_lead %}<a class="back" href="{{ url_for('index') if day == local_today() else url_for('index', day=day.isoformat()) }}">‹ {{ day|relative_day }}</a>{% endblock %}
+{% block heading %}{{ day.strftime("%A %d %B") }}{% endblock %}
+{% block content %}
+<div class="bento">
+{% for entry in sessions %}
+{% if entry.kind == "gym" %}
+{% set meta %}{% if entry.health and entry.health.duration_s %}{{ entry.health.duration_s|duration }} · {% endif %}{% if entry.health and entry.health.active_kcal %}{{ entry.health.active_kcal|round|int }} kcal · {% endif %}{{ entry.sets }} set{{ "" if entry.sets == 1 else "s" }}{% if entry.volume %} · {{ "{:,.0f}".format(entry.volume) }} kg{% endif %}{% endset %}
+{% call ui.tile(entry.split.label or "Gym session", "workout", "dumbbell", meta, span=2) %}
+  {% if entry.health %}<p class="tile-empty">{{ ui.badge() }}{{ entry.health.activity }} · {{ entry.health.started_at|clock }}</p>{% endif %}
+  {% if entry.split.groups %}
+  <div class="stage-bar" role="img" aria-label="Sets by muscle group: {% for label, percent in entry.split.groups %}{{ label }} {{ percent }}%{{ ', ' if not loop.last }}{% endfor %}">
+    {% for label, percent in entry.split.groups %}<span class="group-{{ label|lower }}" style="--share:{{ percent }}%"></span>{% endfor %}
+  </div>
+  <div class="legend">{% for label, percent in entry.split.groups %}<span><i class="swatch group-{{ label|lower }}"></i>{{ label }} {{ percent }}%</span>{% endfor %}</div>
+  {% endif %}
+  <div class="day-exercises">
+    {% for exercise in entry.exercises %}
+    <div class="day-exercise">
+      <a class="day-exercise-head" href="{{ url_for('exercise_history', name=exercise.name) }}">
+        {% if exercise.image %}<img class="thumb" src="{{ exercise.image }}" alt="" width="38" height="38" loading="lazy">{% else %}<span class="row-icon">{{ ui.icon("dumbbell") }}</span>{% endif %}
+        <span class="row-main"><span class="row-title">{{ exercise.name }}</span>
+          <span class="row-sub">{{ exercise.muscles|map("capitalize")|join(", ") or "Your own exercise" }}{% if exercise.volume %} · {{ "{:,.0f}".format(exercise.volume) }} kg{% endif %}</span></span>
+        <span class="chevron" aria-hidden="true"></span>
+      </a>
+      <div class="tags">{% for one in exercise.sets_detail %}<span class="tag is-on">{{ one.reps }}{% if one.weight_kg is not none %} × {{ one.weight_kg|kg }} kg{% else %} reps{% endif %}{% if one.rpe %} @{{ one.rpe|kg }}{% endif %}</span>{% endfor %}</div>
+      {% if exercise.notes %}<p class="fine-print">{{ exercise.notes }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+{% endcall %}
+{% else %}
+{% set meta %}{{ entry.started_at|clock }}{% if entry.duration_s %} · {{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}{% if entry.active_kcal %} · {{ entry.active_kcal|round|int }} kcal{% endif %}{% endset %}
+{% call ui.tile(entry.activity|short_activity, "workout" if entry.activity is strength else "steps", "dumbbell" if entry.activity is strength else "pulse", meta, span=2) %}
+  {% if entry.activity is strength %}
+  <div class="tile-cta"><span class="tile-empty">No exercises logged for this session.</span><a class="pill-action" href="{{ url_for('log_page', session=entry.id) }}">Log exercises</a></div>
+  {% else %}
+  <p class="tile-empty">{{ ui.badge() }}Recorded by Apple Health</p>
+  {% endif %}
+{% endcall %}
+{% endif %}
+{% endfor %}
+</div>
+{% endblock %}

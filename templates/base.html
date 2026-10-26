@@ -50,7 +50,7 @@
   const FRESH_MS = 20000;
   const cache = new Map();
   let shown = location.pathname + location.search;
-  const appPath = path => /^\/($|log$|progress$|settings$|exercises\/)/.test(path);
+  const appPath = path => /^\/($|log$|progress$|settings$|exercises\/|workouts\/)/.test(path);
   const eligible = link => link && link.origin === location.origin && !link.target && !link.hasAttribute("download")
     && appPath(link.pathname) && !(link.pathname === location.pathname && link.hash);
 

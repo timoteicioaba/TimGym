@@ -97,3 +97,55 @@ class CatalogRouteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SplitTests(unittest.TestCase):
+    def label(self, *exercises):
+        import training_split
+        return training_split.classify([(catalog.match(name)["primaryMuscles"] if catalog.match(name) else [], sets)
+                                        for name, sets in exercises])["label"]
+
+    def test_day_types(self):
+        self.assertEqual(self.label(("Squat", 5), ("RDL", 3), ("Leg press", 3), ("Calf raises", 3)), "Leg day")
+        self.assertEqual(self.label(("Bench", 5), ("OHP", 4), ("Tricep pushdown", 3), ("Lateral raises", 3)), "Push day")
+        self.assertEqual(self.label(("Bench", 5), ("Incline db press", 4), ("Cable fly", 3)), "Chest day")
+        self.assertEqual(self.label(("Pull ups", 4), ("Rows", 4), ("Barbell curl", 3), ("Face pulls", 3)), "Pull day")
+        self.assertEqual(self.label(("Rows", 4), ("Lat pulldown", 4), ("Seated cable row", 3)), "Back day")
+        self.assertEqual(self.label(("Barbell curl", 4), ("Hammer curls", 3), ("Tricep pushdown", 4)), "Arm day")
+        self.assertEqual(self.label(("Squat", 5), ("Bench", 5), ("Rows", 4)), "Full body")
+        self.assertEqual(self.label(("Bench", 4), ("Rows", 4), ("OHP", 3), ("Pull ups", 3)), "Upper body")
+        self.assertIsNone(self.label(("My band drill", 3)))
+
+
+class DayPageTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        timgym.create_user("dayviewer", "a-long-password")
+        db = timgym.connect_db()
+        cls.user_id = db.execute("SELECT id FROM users WHERE username = 'dayviewer'").fetchone()[0]
+        db.close()
+
+    def setUp(self):
+        self.client = timgym.app.test_client()
+        with self.client.session_transaction() as session:
+            session["user_id"] = self.user_id
+            session["_csrf"] = "token"
+
+    def test_day_page_lists_the_session_with_its_type(self):
+        self.client.post("/workouts/save", headers={"X-CSRF-Token": "token"}, json={"date": "2026-10-15", "exercises": [
+            {"name": "Squat", "sets": [{"reps": 5, "weight_kg": 100}] * 3},
+            {"name": "Leg press", "sets": [{"reps": 10, "weight_kg": 200}] * 3},
+        ]})
+        page = self.client.get("/workouts/2026-10-15").get_data(as_text=True)
+        self.assertIn("Leg day", page)
+        self.assertIn('<span class="row-title">Squat</span>', page)
+        self.assertIn("/catalog/image/Barbell_Squat/0.jpg", page)
+        self.assertEqual(page.count("5 × 100 kg"), 3)
+        self.assertIn("Legs 100%", page)
+        today = self.client.get("/?day=2026-10-15").get_data(as_text=True)
+        self.assertIn('href="/workouts/2026-10-15"', today)
+        self.assertIn("<strong>Leg day</strong>", today)
+
+    def test_empty_or_invalid_days(self):
+        self.assertEqual(self.client.get("/workouts/2026-01-01").status_code, 302)
+        self.assertEqual(self.client.get("/workouts/not-a-day").status_code, 404)

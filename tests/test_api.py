@@ -98,7 +98,7 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         page = self.client.get("/").get_data(as_text=True)
         self.assertNotIn(">Log exercises<", page)
-        self.assertIn("<strong>Strength training</strong>", page)  # now shown as one merged session
+        self.assertIn("<strong>Leg day</strong>", page)  # one merged session, named by what was trained
 
     def test_today_shows_nutrition_and_body(self):
         today = date.today().isoformat()

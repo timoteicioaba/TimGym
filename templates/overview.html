@@ -38,19 +38,19 @@
   {% for entry in sessions[:2] %}
   <div class="session">
     {% if entry.kind == "gym" %}
-    <div class="session-line">
-      <strong>{{ entry.health.activity|short_activity if entry.health else "Gym session" }}</strong>
-      <span>{% if entry.health and entry.health.duration_s %}{{ entry.health.duration_s|duration }} · {% endif %}{% if entry.health and entry.health.active_kcal %}{{ entry.health.active_kcal|round|int }} kcal · {% endif %}{{ entry.sets }} set{{ "" if entry.sets == 1 else "s" }}</span>
-    </div>
+    <a class="session-line session-link" href="{{ url_for('workout_day', day=entry.date) }}">
+      <strong>{{ entry.split.label or (entry.health.activity|short_activity if entry.health else "Gym session") }}</strong>
+      <span>{% if entry.health and entry.health.duration_s %}{{ entry.health.duration_s|duration }} · {% endif %}{% if entry.health and entry.health.active_kcal %}{{ entry.health.active_kcal|round|int }} kcal · {% endif %}{{ entry.sets }} set{{ "" if entry.sets == 1 else "s" }} ›</span>
+    </a>
     <ul class="exercise-lines">
       {% for exercise in entry.exercises[:3] %}<li><span class="with-thumb">{% if exercise.image %}<img class="thumb thumb--sm" src="{{ exercise.image }}" alt="" width="26" height="26" loading="lazy">{% endif %}{{ exercise.name }}</span><span>{{ exercise.summary }}</span></li>{% endfor %}
       {% if entry.exercises|length > 3 %}<li class="muted">+{{ entry.exercises|length - 3 }} more</li>{% endif %}
     </ul>
     {% else %}
-    <div class="session-line">
+    <a class="session-line session-link" href="{{ url_for('workout_day', day=entry.date) }}">
       <strong>{{ entry.activity|short_activity }}</strong>
-      <span>{% if entry.activity is strength %}{{ entry.started_at|clock }} · {% endif %}{% if entry.duration_s %}{{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}{% if entry.active_kcal %} · {{ entry.active_kcal|round|int }} kcal{% endif %}</span>
-    </div>
+      <span>{% if entry.activity is strength %}{{ entry.started_at|clock }} · {% endif %}{% if entry.duration_s %}{{ entry.duration_s|duration }}{% endif %}{% if entry.distance_km %} · {{ "%.2f"|format(entry.distance_km) }} km{% endif %}{% if entry.active_kcal %} · {{ entry.active_kcal|round|int }} kcal{% endif %} ›</span>
+    </a>
     {% if entry.activity is strength %}<a class="pill-action" href="{{ url_for('log_page', session=entry.id) }}">Log exercises</a>{% endif %}
     {% endif %}
   </div>

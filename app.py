@@ -17,6 +17,7 @@ from flask import Flask, abort, flash, g, redirect, render_template, request, se
 from health_import import metric_group, normalize_health_payload
 import exercise_catalog
 import push
+import training_split
 import requests
 from workout_parser import parse_workout_note
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -352,7 +353,7 @@ def asset_version():
 
 @app.context_processor
 def template_globals():
-    return {"user": g.get("user"), "csrf": csrf_token(), "asset_version": asset_version()}
+    return {"user": g.get("user"), "csrf": csrf_token(), "asset_version": asset_version(), "local_today": local_today}
 
 
 @app.template_filter("relative_day")
@@ -437,9 +438,13 @@ def gym_sessions(db, user_id, since=None, limit=None, until=None):
                                                    "volume": 0.0, "logged_at": row["created_at"], "health": None})
         session_entry["logged_at"] = min(session_entry["logged_at"], row["created_at"])
         sets = row_sets(row)
-        card = catalog_card(catalog_entry(row["exercise"], row["catalog_id"]))
-        session_entry["exercises"].append({"name": row["exercise"], "summary": summarize_sets(sets), "notes": row["notes"],
-                                           "image": card["image"] if card else None})
+        entry = catalog_entry(row["exercise"], row["catalog_id"])
+        card = catalog_card(entry)
+        session_entry["exercises"].append({
+            "name": row["exercise"], "summary": summarize_sets(sets), "notes": row["notes"], "sets_detail": sets,
+            "image": card["image"] if card else None, "muscles": entry["primaryMuscles"] if entry else [],
+            "volume": sum(one["reps"] * (one.get("weight_kg") or 0) for one in sets),
+        })
         session_entry["sets"] += len(sets)
         session_entry["volume"] += sum(one["reps"] * (one.get("weight_kg") or 0) for one in sets)
         if limit and len(sessions) > limit:
@@ -447,6 +452,8 @@ def gym_sessions(db, user_id, since=None, limit=None, until=None):
             break
     for entry in sessions.values():
         entry["exercises"].reverse()  # in the order they were logged
+        # Leg day, Push day, ... from the muscles trained, weighted by sets.
+        entry["split"] = training_split.classify([(e["muscles"], len(e["sets_detail"])) for e in entry["exercises"]])
     return list(sessions.values())
 
 
@@ -778,6 +785,24 @@ def exercise_history(name):
         "exercise.html", tab="home", name=entry["name"] if entry else rows[0]["exercise"], entries=entries, best=best,
         catalog=entry, photos=[url_for("catalog_image", exercise_id=entry["id"], index=i) for i in range(len(entry["images"]))] if entry else [],
     )
+
+
+@app.get("/workouts/<day>")
+@login_required
+def workout_day(day):
+    """Everything trained on one day: sessions with their type, muscles, and every set."""
+    try:
+        chosen = date.fromisoformat(day)
+    except ValueError:
+        abort(404)
+    db = get_db()
+    gym = gym_sessions(db, g.user["id"], since=chosen, until=chosen)
+    other = link_health_to_gym(gym, health_workouts(db, g.user["id"], since=chosen, until=chosen))
+    sessions = sorted(gym + other, key=lambda entry: entry.get("started_at") or (entry.get("health") or {}).get("started_at") or "")
+    if not sessions:
+        flash("Nothing was logged on that day.")
+        return redirect(url_for("index", day=day))
+    return render_template("workout_day.html", tab="home", day=chosen, sessions=sessions)
 
 
 @app.get("/log")
