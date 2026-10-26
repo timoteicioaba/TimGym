@@ -73,6 +73,9 @@
     const nextPage = next.getElementById("page");
     const page = document.getElementById("page");
     if (!nextPage || !page) { location.href = url; return; }
+    // After a deploy the new page expects a newer stylesheet; load it properly.
+    const sheet = doc => (doc.querySelector('link[rel="stylesheet"]') || {}).getAttribute?.("href");
+    if (sheet(next) !== sheet(document)) { location.href = url; return; }
     page.replaceWith(document.adoptNode(nextPage));
     document.title = next.title;
     const nextTabs = next.querySelectorAll(".tab-bar .tab");

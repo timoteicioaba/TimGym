@@ -328,7 +328,7 @@ input[type=file]::file-selector-button{margin-right:10px;padding:7px var(--s3);b
 
 /* Exercise catalog: photos and picker */
 .thumb{flex:0 0 38px;width:38px;height:38px;border-radius:var(--s3);object-fit:cover;background:var(--surface-raised)}
-.thumb--sm{flex-basis:22px;width:22px;height:22px;border-radius:6px;margin-right:6px;vertical-align:-6px}
+.thumb--sm{flex:0 0 26px;width:26px;height:26px;border-radius:7px;margin-right:var(--s2)}
 .with-thumb{display:inline-flex;align-items:center;min-width:0}
 .photo-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
 .photo-pair img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r-md);background:var(--surface-raised)}

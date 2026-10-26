@@ -144,6 +144,7 @@ function renderCatalogMatch(picker, exercise) {
       const photo = document.createElement("img");
       photo.src = exercise.catalog.image;
       photo.alt = "";
+      photo.width = photo.height = 44;
       match.append(photo);
     }
     title.textContent = exercise.catalog.name;
@@ -175,7 +176,7 @@ function searchCatalog(picker, exercise, query, delay = 200) {
       const option = document.createElement("button");
       option.type = "button";
       const photo = document.createElement(result.image ? "img" : "span");
-      if (result.image) { photo.src = result.image; photo.alt = ""; photo.loading = "lazy"; } else { photo.className = "catalog-noimg"; }
+      if (result.image) { photo.src = result.image; photo.alt = ""; photo.width = photo.height = 40; photo.loading = "lazy"; } else { photo.className = "catalog-noimg"; }
       const label = document.createElement("span");
       label.textContent = result.name;
       const detail = document.createElement("small");

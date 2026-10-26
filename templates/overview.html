@@ -43,7 +43,7 @@
       <span>{% if entry.health and entry.health.duration_s %}{{ entry.health.duration_s|duration }} · {% endif %}{% if entry.health and entry.health.active_kcal %}{{ entry.health.active_kcal|round|int }} kcal · {% endif %}{{ entry.sets }} set{{ "" if entry.sets == 1 else "s" }}</span>
     </div>
     <ul class="exercise-lines">
-      {% for exercise in entry.exercises[:3] %}<li><span class="with-thumb">{% if exercise.image %}<img class="thumb thumb--sm" src="{{ exercise.image }}" alt="" loading="lazy">{% endif %}{{ exercise.name }}</span><span>{{ exercise.summary }}</span></li>{% endfor %}
+      {% for exercise in entry.exercises[:3] %}<li><span class="with-thumb">{% if exercise.image %}<img class="thumb thumb--sm" src="{{ exercise.image }}" alt="" width="26" height="26" loading="lazy">{% endif %}{{ exercise.name }}</span><span>{{ exercise.summary }}</span></li>{% endfor %}
       {% if entry.exercises|length > 3 %}<li class="muted">+{{ entry.exercises|length - 3 }} more</li>{% endif %}
     </ul>
     {% else %}
