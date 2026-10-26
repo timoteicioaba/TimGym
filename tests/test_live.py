@@ -101,23 +101,50 @@ class LiveWorkoutTests(unittest.TestCase):
             response = self.post(f"/live/{session_id}/sets", body)
             self.assertEqual(response.status_code, 200, response.json)
         exercises = response.json["exercises"]
-        self.assertEqual([(e["name"], len(e["sets"])) for e in exercises], [("Bench press", 1), ("Squat", 3), ("Pull ups", 1)])
+        # Logged under the library's names, with photos.
+        self.assertEqual([(e["name"], len(e["sets"])) for e in exercises],
+                         [("Barbell Bench Press - Medium Grip", 1), ("Barbell Squat", 3), ("Pullups", 1)])
+        self.assertTrue(all(e["image"].startswith("/catalog/image/") for e in exercises))
         exercises = self.post(f"/live/{session_id}/undo").json["exercises"]
-        self.assertEqual([e["name"] for e in exercises], ["Bench press", "Squat"])
+        self.assertEqual([e["name"] for e in exercises], ["Barbell Bench Press - Medium Grip", "Barbell Squat"])
         self.assertEqual(self.post(f"/live/{session_id}/sets", {"exercise": "", "reps": 5}).status_code, 400)
         self.assertEqual(self.post(f"/live/{session_id}/sets", {"exercise": "Row", "reps": "lots"}).status_code, 400)
 
         response = self.client.post(f"/live/{session_id}/finish", data={"_csrf": "token"})
         self.assertEqual(response.status_code, 302)
         db = timgym.connect_db()
-        rows = db.execute("SELECT workout_date, exercise, sets FROM workouts WHERE user_id = ? ORDER BY id", (self.user_id,)).fetchall()
+        rows = db.execute("SELECT workout_date, exercise, sets, catalog_id FROM workouts WHERE user_id = ? ORDER BY id", (self.user_id,)).fetchall()
         status = db.execute("SELECT status FROM live_sessions WHERE id = ?", (session_id,)).fetchone()[0]
         db.close()
-        self.assertEqual([(row["exercise"], row["sets"]) for row in rows], [("Bench press", 1), ("Squat", 3)])
+        self.assertEqual([(row["exercise"], row["sets"], row["catalog_id"]) for row in rows],
+                         [("Barbell Bench Press - Medium Grip", 1, "Barbell_Bench_Press_-_Medium_Grip"), ("Barbell Squat", 3, "Barbell_Squat")])
         self.assertEqual(rows[0]["workout_date"], timgym.local_today().isoformat())
         self.assertEqual(status, "finished")
         self.assertEqual(self.post(f"/live/{session_id}/sets", {"exercise": "Squat", "reps": 5}).status_code, 409)
         self.assertTrue(self.api("/api/live/start").json["created"])  # a finished session isn't reused
+
+    def test_same_exercise_under_different_names_is_one_exercise(self):
+        session_id = self.api("/api/live/start").json["session_id"]
+        for body in ({"exercise": "squat", "reps": 5, "weight_kg": 100}, {"exercise": "Barbell Squat", "reps": 5, "weight_kg": 100},
+                     {"exercise": "Back squats", "reps": 5, "weight_kg": 100},
+                     {"exercise": "Whatever", "catalog_id": "Barbell_Squat", "reps": 5, "weight_kg": 100},
+                     {"exercise": "My weird drill", "reps": 10}, {"exercise": "my weird drill", "reps": 10}):
+            exercises = self.post(f"/live/{session_id}/sets", body).json["exercises"]
+        self.assertEqual([(e["name"], len(e["sets"])) for e in exercises], [("Barbell Squat", 4), ("My weird drill", 2)])
+
+    def test_choices_list_each_exercise_once(self):
+        db = timgym.connect_db()
+        for day, name in (("2026-10-01", "Squat"), ("2026-10-02", "Barbell Squat"), ("2026-10-03", "squats"), ("2026-10-04", "My drill")):
+            db.execute("INSERT INTO workouts (user_id, workout_date, exercise, sets, reps, weight_kg) VALUES (?, ?, ?, 1, 5, 100)",
+                       (self.user_id, day, name))
+        db.commit()
+        db.close()
+        session_id = self.api("/api/live/start").json["session_id"]
+        page = self.client.get(f"/live/{session_id}").get_data(as_text=True)
+        self.assertEqual(page.count('class="chip"'), 2)
+        self.assertIn('data-exercise="Barbell Squat" data-catalog-id="Barbell_Squat"', page)
+        self.assertIn('data-exercise="My drill"', page)
+        self.assertIn('"barbell squat": {"reps": 5', page)  # prefill under the name the page logs
 
     def test_finishing_without_sets_saves_nothing(self):
         session_id = self.api("/api/live/start").json["session_id"]

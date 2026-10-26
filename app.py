@@ -1475,10 +1475,12 @@ def last_sets_by_exercise(user_id):
     """Each exercise's last logged set, to prefill the steppers."""
     last = {}
     for row in get_db().execute(
-        "SELECT exercise, sets_json, reps, weight_kg, sets FROM workouts WHERE user_id = ? ORDER BY workout_date DESC, id DESC LIMIT 300",
+        "SELECT exercise, catalog_id, sets_json, reps, weight_kg, sets FROM workouts WHERE user_id = ? ORDER BY workout_date DESC, id DESC LIMIT 300",
         (user_id,),
     ):
-        key = row["exercise"].casefold()
+        # Keyed by the name the live page logs under: the catalog name when there is one.
+        entry = catalog_entry(row["exercise"], row["catalog_id"])
+        key = (entry["name"] if entry else row["exercise"]).casefold()
         if key not in last:
             sets = row_sets(row)
             if sets:
@@ -1549,9 +1551,9 @@ def live_page(session_id):
         return redirect(url_for("index"))
     started = datetime.fromisoformat(session_row["started_at"])
     return render_template(
-        "live.html", tab="log", live=session_row, exercises=live_exercises(session_row),
+        "live.html", tab="log", live=session_row, exercises=live_exercise_cards(live_exercises(session_row)),
         started_local=started.astimezone(LOCAL_TZ) if LOCAL_TZ else started,
-        known_exercises=known_exercise_names(g.user["id"])[:20], last_sets=last_sets_by_exercise(g.user["id"]),
+        choices=exercise_choices(g.user["id"]), last_sets=last_sets_by_exercise(g.user["id"]),
     )
 
 
@@ -1572,13 +1574,18 @@ def live_add_set(session_id):
         return {"error": "Enter reps as a whole number and weight in kg."}, 400
     if not name or not 1 <= reps <= 999:
         return {"error": "Choose an exercise and enter 1–999 reps."}, 400
+    # "squat" and "Barbell Squat" are one exercise: log it under its catalog name.
+    entry = exercise_catalog.get(payload.get("catalog_id")) or exercise_catalog.match(name)
+    if entry:
+        name = entry["name"]
+    identity = exercise_identity(name, entry["id"] if entry else None)
     exercises = live_exercises(session_row)
-    if len(exercises) >= 30 and not any(e["name"].casefold() == name.casefold() for e in exercises):
-        return {"error": "A workout can hold up to 30 exercises."}, 400
     # Sets for an exercise done earlier in the session join that exercise's list.
-    target = next((e for e in exercises if e["name"].casefold() == name.casefold()), None)
+    target = next((e for e in exercises if exercise_identity(e["name"], e.get("catalog_id")) == identity), None)
     if target is None:
-        target = {"name": name, "sets": []}
+        if len(exercises) >= 30:
+            return {"error": "A workout can hold up to 30 exercises."}, 400
+        target = {"name": name, "catalog_id": entry["id"] if entry else None, "sets": []}
         exercises.append(target)
     if len(target["sets"]) >= 99:
         return {"error": "That exercise already has 99 sets."}, 400
@@ -1587,7 +1594,36 @@ def live_add_set(session_id):
     exercises.remove(target)
     exercises.append(target)
     save_live_exercises(session_id, exercises)
-    return {"exercises": exercises}
+    return {"exercises": live_exercise_cards(exercises)}
+
+
+def live_exercise_cards(exercises):
+    """The live log with each exercise's photo, for the page."""
+    cards = []
+    for exercise in exercises:
+        card = catalog_card(catalog_entry(exercise["name"], exercise.get("catalog_id")))
+        cards.append(dict(exercise, image=card["image"] if card else None))
+    return cards
+
+
+def exercise_choices(user_id, limit=20):
+    """Exercises the user has logged, most recent first, one per catalog entry
+    under its catalog name ("Squat" and "Barbell Squat" are one choice)."""
+    choices, seen = [], set()
+    for row in get_db().execute(
+        "SELECT exercise, catalog_id FROM workouts WHERE user_id = ? ORDER BY workout_date DESC, id DESC LIMIT 500", (user_id,)
+    ):
+        entry = catalog_entry(row["exercise"], row["catalog_id"])
+        identity = ("catalog", entry["id"]) if entry else ("name", row["exercise"].casefold())
+        if identity in seen:
+            continue
+        seen.add(identity)
+        card = catalog_card(entry)
+        choices.append({"name": entry["name"] if entry else row["exercise"], "catalog_id": entry["id"] if entry else None,
+                        "image": card["image"] if card else None, "muscles": card["muscles"] if card else []})
+        if len(choices) >= limit:
+            break
+    return choices
 
 
 @app.post("/live/<int:session_id>/undo")
@@ -1602,7 +1638,7 @@ def live_undo(session_id):
         if not exercises[-1]["sets"]:
             exercises.pop()
         save_live_exercises(session_id, exercises)
-    return {"exercises": exercises}
+    return {"exercises": live_exercise_cards(exercises)}
 
 
 @app.post("/live/<int:session_id>/finish")

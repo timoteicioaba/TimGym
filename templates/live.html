@@ -6,9 +6,11 @@
 {% block content %}
 <div class="bento">
 {% call ui.tile("Exercise", "workout", "dumbbell", span=2) %}
-  <input id="live-exercise" list="live-known" maxlength="80" placeholder="Choose or type an exercise" aria-label="Exercise" autocapitalize="words">
-  <datalist id="live-known">{% for name in known_exercises %}<option value="{{ name }}">{% endfor %}</datalist>
-  {% if known_exercises %}<div class="chip-row">{% for name in known_exercises[:12] %}<button class="chip" type="button" data-exercise="{{ name }}">{{ name }}</button>{% endfor %}</div>{% endif %}
+  <div class="exercise-search">
+    <input id="live-exercise" maxlength="80" placeholder="Search exercises" aria-label="Exercise" autocapitalize="words" autocomplete="off" enterkeyhint="search" role="combobox" aria-controls="live-suggestions" aria-expanded="false">
+    <div class="catalog-results" id="live-suggestions" role="listbox" hidden></div>
+  </div>
+  {% if choices %}<div class="chip-row">{% for choice in choices[:12] %}<button class="chip" type="button" data-exercise="{{ choice.name }}" data-catalog-id="{{ choice.catalog_id or '' }}">{{ choice.name }}</button>{% endfor %}</div>{% endif %}
   <div class="steppers">
     <div class="stepper">
       <span class="label">Reps</span>
@@ -54,13 +56,16 @@
 const live = {
   csrf: {{ csrf|tojson }},
   startedAt: new Date({{ live.started_at|tojson }}),
-  urls: {add: {{ url_for('live_add_set', session_id=live.id)|tojson }}, undo: {{ url_for('live_undo', session_id=live.id)|tojson }}},
+  urls: {add: {{ url_for('live_add_set', session_id=live.id)|tojson }}, undo: {{ url_for('live_undo', session_id=live.id)|tojson }}, search: {{ url_for('catalog_search')|tojson }}},
+  choices: {{ choices|tojson }},
   exercises: {{ exercises|tojson }},
   lastSets: {{ last_sets|tojson }},
 };
 const $ = id => document.getElementById(id);
 const exerciseInput = $("live-exercise"), repsInput = $("live-reps"), weightInput = $("live-weight"), statusLine = $("live-status");
 const exerciseKey = "timgym-live-exercise-" + {{ live.id|tojson }};
+const suggestions = $("live-suggestions");
+let chosenCatalogId = null, searchTimer = null, searchToken = 0;
 
 function tick() {
   const seconds = Math.max(0, Math.floor((Date.now() - live.startedAt) / 1000));
@@ -87,7 +92,13 @@ function render() {
     const block = document.createElement("div");
     block.className = "live-exercise";
     const name = document.createElement("strong");
-    name.textContent = exercise.name;
+    name.className = "with-thumb";
+    if (exercise.image) {
+      const photo = document.createElement("img");
+      Object.assign(photo, {className: "thumb thumb--sm", src: exercise.image, alt: "", width: 26, height: 26});
+      name.append(photo);
+    }
+    name.append(exercise.name);
     const sets = document.createElement("div");
     sets.className = "tags";
     exercise.sets.forEach((set, index) => {
@@ -114,10 +125,70 @@ function prefill(name) {
   weightInput.value = last.weight_kg === null || last.weight_kg === undefined ? "" : last.weight_kg;
 }
 
-function chooseExercise(name) {
+function chooseExercise(name, catalogId) {
   exerciseInput.value = name;
-  try { localStorage.setItem(exerciseKey, name); } catch (error) {}
+  chosenCatalogId = catalogId || null;
+  hideSuggestions();
+  try { localStorage.setItem(exerciseKey, JSON.stringify({name: name, catalog_id: chosenCatalogId})); } catch (error) {}
   prefill(name);
+}
+
+// Suggestions while typing: exercises you've logged, then the exercise library.
+const simplify = text => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function hideSuggestions() {
+  suggestions.hidden = true;
+  suggestions.replaceChildren();
+  exerciseInput.setAttribute("aria-expanded", "false");
+}
+
+function suggestionButton(choice, detail) {
+  const option = document.createElement("button");
+  option.type = "button";
+  option.setAttribute("role", "option");
+  const photo = document.createElement(choice.image ? "img" : "span");
+  if (choice.image) Object.assign(photo, {src: choice.image, alt: "", width: 40, height: 40, loading: "lazy"}); else photo.className = "catalog-noimg";
+  const label = document.createElement("span");
+  label.textContent = choice.name;
+  const small = document.createElement("small");
+  small.textContent = detail;
+  label.append(small);
+  option.append(photo, label);
+  // pointerdown fires before the input loses focus, so the list is still there to tap.
+  option.addEventListener("pointerdown", event => event.preventDefault());
+  option.addEventListener("click", () => chooseExercise(choice.name, choice.catalog_id || choice.id));
+  return option;
+}
+
+function showSuggestions(query, results) {
+  const words = simplify(query).split(" ").filter(Boolean);
+  const own = live.choices.filter(choice => words.every(word => simplify(choice.name).includes(word))).slice(0, 4);
+  const seen = new Set(own.map(choice => choice.catalog_id || simplify(choice.name)));
+  suggestions.replaceChildren();
+  own.forEach(choice => suggestions.append(suggestionButton(choice, "Done before" + (choice.muscles.length ? " · " + choice.muscles.join(", ") : ""))));
+  results.filter(result => !seen.has(result.id)).slice(0, 8 - own.length).forEach(result =>
+    suggestions.append(suggestionButton(result, [result.muscles.join(", "), result.equipment].filter(Boolean).join(" · "))));
+  suggestions.hidden = !suggestions.childElementCount;
+  exerciseInput.setAttribute("aria-expanded", String(!suggestions.hidden));
+}
+
+function searchExercises() {
+  const query = exerciseInput.value;
+  chosenCatalogId = null;
+  clearTimeout(searchTimer);
+  if (!query.trim()) {
+    // An empty box lists what you've done before.
+    showSuggestions("", []);
+    return;
+  }
+  showSuggestions(query, []);
+  const token = ++searchToken;
+  searchTimer = setTimeout(async () => {
+    try {
+      const response = await fetch(live.urls.search + "?q=" + encodeURIComponent(query.trim()));
+      const results = (await response.json()).results || [];
+      if (token === searchToken && document.activeElement === exerciseInput) showSuggestions(query, results);
+    } catch (error) {}
+  }, 150);
 }
 
 async function send(url, body) {
@@ -135,32 +206,51 @@ async function send(url, body) {
   }
 }
 
-async function addSet(exercise, reps, weight) {
+async function addSet(exercise, reps, weight, catalogId) {
   if (!exercise) { statusLine.textContent = "Choose an exercise first."; exerciseInput.focus(); return; }
-  if (await send(live.urls.add, {exercise: exercise, reps: reps, weight_kg: weight})) {
-    statusLine.textContent = "Saved " + exercise + " · " + formatSet({reps: Number(reps), weight_kg: weight === "" || weight === null ? null : Number(weight)}) + ".";
+  hideSuggestions();
+  if (await send(live.urls.add, {exercise: exercise, catalog_id: catalogId || null, reps: reps, weight_kg: weight})) {
+    // The server files "squat" under the library's "Barbell Squat"; show that name from now on.
+    const saved = live.exercises[live.exercises.length - 1];
+    if (saved && saved.name !== exercise) chooseExercise(saved.name, saved.catalog_id);
+    statusLine.textContent = "Saved " + (saved ? saved.name : exercise) + " · " + formatSet({reps: Number(reps), weight_kg: weight === "" || weight === null ? null : Number(weight)}) + ".";
     if (navigator.vibrate) navigator.vibrate(15);
   }
 }
 
-$("live-add").addEventListener("click", () => addSet(exerciseInput.value.trim(), repsInput.value, weightInput.value === "" ? null : weightInput.value));
+$("live-add").addEventListener("click", () => addSet(exerciseInput.value.trim(), repsInput.value, weightInput.value === "" ? null : weightInput.value, chosenCatalogId));
 $("live-repeat").addEventListener("click", () => {
   const exercise = live.exercises[live.exercises.length - 1];
   if (!exercise) return;
   const set = exercise.sets[exercise.sets.length - 1];
-  addSet(exercise.name, set.reps, set.weight_kg);
+  addSet(exercise.name, set.reps, set.weight_kg, exercise.catalog_id);
 });
 $("live-undo").addEventListener("click", () => send(live.urls.undo).then(ok => { if (ok) statusLine.textContent = "Removed the last set."; }));
-exerciseInput.addEventListener("change", () => chooseExercise(exerciseInput.value.trim()));
-document.querySelectorAll("[data-exercise]").forEach(chip => chip.addEventListener("click", () => chooseExercise(chip.dataset.exercise)));
+exerciseInput.addEventListener("input", searchExercises);
+exerciseInput.addEventListener("focus", () => { exerciseInput.select(); searchExercises(); });
+exerciseInput.addEventListener("blur", () => setTimeout(hideSuggestions, 150));
+exerciseInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const first = suggestions.querySelector("button");
+    if (first) first.click(); else exerciseInput.blur();
+  } else if (event.key === "Escape") hideSuggestions();
+});
+document.querySelectorAll("[data-exercise]").forEach(chip => chip.addEventListener("click", () => chooseExercise(chip.dataset.exercise, chip.dataset.catalogId)));
 document.querySelectorAll("[data-step]").forEach(button => button.addEventListener("click", () => {
   const input = button.dataset.step === "reps" ? repsInput : weightInput;
   const next = Math.max(Number(input.min), (Number(input.value) || 0) + Number(button.dataset.by));
   input.value = button.dataset.step === "reps" ? Math.round(next) : Math.round(next * 2) / 2;
 }));
 
-try { const remembered = localStorage.getItem(exerciseKey); if (remembered) chooseExercise(remembered); } catch (error) {}
-if (!exerciseInput.value && live.exercises.length) chooseExercise(live.exercises[live.exercises.length - 1].name);
+try {
+  const remembered = JSON.parse(localStorage.getItem(exerciseKey) || "null");
+  if (remembered && remembered.name) chooseExercise(remembered.name, remembered.catalog_id);
+} catch (error) {}
+if (!exerciseInput.value && live.exercises.length) {
+  const last = live.exercises[live.exercises.length - 1];
+  chooseExercise(last.name, last.catalog_id);
+}
 render();
 </script>
 {% endblock %}
