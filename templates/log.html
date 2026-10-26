@@ -55,6 +55,8 @@ const dateInput = document.getElementById("workout-date");
 const interpretButton = document.getElementById("interpret-workout");
 const addExerciseButton = document.getElementById("add-exercise");
 const saveButton = document.getElementById("save-workout");
+const catalogSearchUrl = {{ url_for('catalog_search')|tojson }};
+let catalogTimer = null;
 const draftKey = "timgym-draft-" + {{ user.username|tojson }};
 try { if (!noteField.value) noteField.value = localStorage.getItem(draftKey) || ""; } catch (error) {}
 
@@ -129,19 +131,99 @@ function renderSetRow(exercise, set, index, showRpe) {
   return row;
 }
 
+function renderCatalogMatch(picker, exercise) {
+  // The chosen library entry (photo and name), or a prompt to pick one.
+  const match = document.createElement("button");
+  match.type = "button";
+  match.className = "catalog-match";
+  const text = document.createElement("span");
+  const title = document.createElement("strong");
+  const hint = document.createElement("span");
+  if (exercise.catalog) {
+    if (exercise.catalog.image) {
+      const photo = document.createElement("img");
+      photo.src = exercise.catalog.image;
+      photo.alt = "";
+      match.append(photo);
+    }
+    title.textContent = exercise.catalog.name;
+    hint.textContent = (exercise.catalog.muscles || []).join(", ") + " · tap to change";
+  } else {
+    title.textContent = exercise.name.trim() ? "Not from the exercise library" : "Choose an exercise";
+    hint.textContent = "Tap to search the library";
+  }
+  text.append(title, hint);
+  match.append(text);
+  match.addEventListener("click", () => searchCatalog(picker, exercise, exercise.name || "", 0));
+  picker.replaceChildren(match);
+}
+
+function searchCatalog(picker, exercise, query, delay = 200) {
+  clearTimeout(catalogTimer);
+  catalogTimer = setTimeout(async () => {
+    let results = [];
+    try {
+      const response = await fetch(catalogSearchUrl + "?q=" + encodeURIComponent(query.trim()));
+      results = (await response.json()).results || [];
+    } catch (error) {
+      return;
+    }
+    picker.querySelector(".catalog-results")?.remove();
+    const list = document.createElement("div");
+    list.className = "catalog-results";
+    for (const result of results) {
+      const option = document.createElement("button");
+      option.type = "button";
+      const photo = document.createElement(result.image ? "img" : "span");
+      if (result.image) { photo.src = result.image; photo.alt = ""; photo.loading = "lazy"; } else { photo.className = "catalog-noimg"; }
+      const label = document.createElement("span");
+      label.textContent = result.name;
+      const detail = document.createElement("small");
+      detail.textContent = [result.muscles.join(", "), result.equipment].filter(Boolean).join(" · ");
+      label.append(detail);
+      option.append(photo, label);
+      option.addEventListener("click", () => {
+        exercise.name = result.name;
+        exercise.catalog_id = result.id;
+        exercise.catalog = result;
+        renderPreview();
+      });
+      list.append(option);
+    }
+    if (query.trim()) {
+      const keep = document.createElement("button");
+      keep.type = "button";
+      keep.textContent = "Keep “" + query.trim() + "” as my own exercise";
+      keep.addEventListener("click", () => list.remove());
+      list.append(keep);
+    }
+    if (list.childElementCount) picker.append(list);
+  }, delay);
+}
+
 function renderExercise(exercise, exerciseIndex) {
   const item = document.createElement("div");
   item.className = "preview-exercise";
   const head = document.createElement("div");
   head.className = "exercise-head";
-  const nameInput = makeInput({type: "text", maxLength: 80, placeholder: "Exercise", "aria-label": "Exercise name"},
-    exercise.name, input => { exercise.name = input.value; }, input => validName(input.value));
-  nameInput.setAttribute("list", "known-exercises");
+  const picker = document.createElement("div");
+  const nameInput = makeInput({type: "text", maxLength: 80, placeholder: "Search exercises", "aria-label": "Exercise name"},
+    exercise.name, input => {
+      // Typing replaces the library choice until a result is picked.
+      exercise.name = input.value;
+      exercise.catalog_id = null;
+      exercise.catalog = null;
+      renderCatalogMatch(picker, exercise);
+      searchCatalog(picker, exercise, input.value);
+    }, input => validName(input.value));
+  nameInput.setAttribute("autocomplete", "off");
   head.append(nameInput, makeButton("×", "icon-button", "Remove " + (exercise.name || "exercise"), () => {
     pendingWorkout.exercises.splice(exerciseIndex, 1);
     renderPreview();
   }));
   item.append(head);
+  renderCatalogMatch(picker, exercise);
+  item.append(picker);
 
   const showRpe = exercise.sets.some(set => !blank(set.rpe));
   const columns = document.createElement("div");
@@ -217,7 +299,7 @@ noteField.addEventListener("input", function () {
 });
 dateInput.addEventListener("input", updateSaveAvailability);
 addExerciseButton.addEventListener("click", () => {
-  pendingWorkout.exercises.push({name: "", notes: "", default_weight_kg: null, sets: [{reps: null, weight_kg: null, rpe: null}]});
+  pendingWorkout.exercises.push({name: "", notes: "", default_weight_kg: null, catalog_id: null, catalog: null, sets: [{reps: null, weight_kg: null, rpe: null}]});
   renderPreview();
   previewContent.lastElementChild.querySelector("input").focus();
 });
@@ -230,6 +312,7 @@ saveButton.addEventListener("click", async function () {
     date: dateInput.value,
     exercises: pendingWorkout.exercises.map(exercise => ({
       name: exercise.name.trim(),
+      catalog_id: exercise.catalog_id || null,
       notes: (exercise.notes || "").trim(),
       sets: exercise.sets.map(set => ({reps: set.reps, weight_kg: blank(set.weight_kg) ? null : set.weight_kg, rpe: blank(set.rpe) ? null : set.rpe}))
     }))

@@ -325,3 +325,20 @@ input[type=file]::file-selector-button{margin-right:10px;padding:7px var(--s3);b
 .live-exercise strong{font-size:.95rem}
 .tile-cta{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .tile-cta .pill-action{margin-top:0}
+
+/* Exercise catalog: photos and picker */
+.thumb{flex:0 0 38px;width:38px;height:38px;border-radius:var(--s3);object-fit:cover;background:var(--surface-raised)}
+.thumb--sm{flex-basis:22px;width:22px;height:22px;border-radius:6px;margin-right:6px;vertical-align:-6px}
+.with-thumb{display:inline-flex;align-items:center;min-width:0}
+.photo-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+.photo-pair img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r-md);background:var(--surface-raised)}
+.catalog-match{display:flex;align-items:center;gap:10px;margin-top:var(--s2);padding:var(--s2);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);font-size:.82rem;color:var(--muted);text-align:left;width:100%;min-height:auto;font-weight:500}
+.catalog-match img{width:44px;height:44px;border-radius:var(--s2);object-fit:cover;flex:0 0 44px}
+.catalog-match strong{display:block;color:var(--text);font-size:.88rem}
+.catalog-results{margin-top:6px;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+.catalog-results button{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:6px 10px;border:0;border-radius:0;background:none;color:var(--text);font-weight:600;font-size:.86rem;text-align:left}
+.catalog-results button + button{border-top:1px solid var(--line-soft)}
+.catalog-results img,.catalog-results .catalog-noimg{width:40px;height:40px;flex:0 0 40px;border-radius:var(--s2);object-fit:cover;background:var(--surface-raised)}
+.catalog-results small{display:block;color:var(--muted);font-weight:500;font-size:.74rem}
+.exercise-lines li > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exercise-lines li > span:last-child{flex:0 0 auto}

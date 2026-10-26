@@ -96,6 +96,12 @@ Workouts are matched by their Apple Health ID and daily totals replace earlier v
 
 A strength-type Apple Health workout (traditional or functional strength, core, cross training, HIIT) and the exercises you log in TimGym on the same day are shown as one session, with Apple's time and calories next to your sets. Cardio such as runs or elliptical stays a separate entry. If you do two strength sessions in a day, each log is paired with the workout it was saved closest to. Energy in kJ and distances in miles are converted. The endpoint also accepts a simpler JSON shape (see `/openapi.yaml`) for your own Shortcut or script.
 
+## Exercise library
+
+When you review a parsed workout, each exercise is matched to an exercise library of about 870 exercises, so “Bench” becomes *Barbell Bench Press - Medium Grip* and “OHP” becomes *Standing Military Press*. Tap the match to search the library and pick another one, or keep your own name. Exercises show their photo on Today, and each exercise page shows its photos, muscles, equipment, and step-by-step instructions. History logged under older names (for example “Squat”) is grouped with the matching library exercise.
+
+The library is [Free Exercise DB](https://github.com/yuhonas/free-exercise-db) (public domain, Unlicense); see `catalog/SOURCE.md`. Photos are downloaded from its GitHub repository the first time each is shown and cached in the data volume under `exercise-images/`, so the server needs outbound access to `raw.githubusercontent.com`.
+
 ## Live workouts from Apple Watch
 
 TimGym can open a live log when you start a strength workout on your Apple Watch and notify your phone, so you add sets as you go.

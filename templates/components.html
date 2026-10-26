@@ -63,6 +63,7 @@
 
 {% macro exercise_row(exercise) -%}
 <a class="row" href="{{ url_for('exercise_history', name=exercise.name) }}">
+  {% if exercise.image %}<img class="thumb" src="{{ exercise.image }}" alt="" loading="lazy">{% else %}<span class="row-icon">{{ icon("dumbbell") }}</span>{% endif %}
   <div class="row-main">
     <span class="row-title">{{ exercise.name }}</span>
     <span class="row-sub">{{ exercise.last_date|relative_day }} · {{ exercise.summary }}</span>

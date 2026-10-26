@@ -4,6 +4,23 @@
 {% block bar_lead %}<a class="back" href="{{ url_for('index') }}">‹ Today</a>{% endblock %}
 {% block heading %}{{ name }}{% endblock %}
 {% block content %}
+{% if catalog %}
+{% call ui.card() %}
+  {% if photos %}<div class="photo-pair">{% for photo in photos %}<img src="{{ photo }}" alt="{{ name }}, {{ 'start' if loop.first else 'end' }} position" loading="lazy">{% endfor %}</div>{% endif %}
+  <div class="tags mt-3">
+    {% for muscle in catalog.primaryMuscles %}<span class="tag is-on">{{ muscle|capitalize }}</span>{% endfor %}
+    {% for muscle in catalog.secondaryMuscles %}<span class="tag">{{ muscle|capitalize }}</span>{% endfor %}
+    {% if catalog.equipment %}<span class="tag">{{ catalog.equipment|capitalize }}</span>{% endif %}
+    {% if catalog.level %}<span class="tag">{{ catalog.level|capitalize }}</span>{% endif %}
+  </div>
+  {% if catalog.instructions %}
+  <details class="disclosure">
+    <summary>How to do it</summary>
+    <ol class="steps">{% for step in catalog.instructions %}<li>{{ step }}</li>{% endfor %}</ol>
+  </details>
+  {% endif %}
+{% endcall %}
+{% endif %}
 <div class="stat-grid">
   {{ ui.stat("Best set", best.weight_kg|kg if best else "—", ("kg × " ~ best.reps) if best else none) }}
   {{ ui.stat("Sessions", entries|map(attribute='date')|unique|list|length, none, "Since " ~ entries[-1].date|relative_day) }}
@@ -20,4 +37,5 @@
   </div>
   {% endfor %}
 </div>
+{% if catalog %}<p class="fine-print mt-3">Exercise photo and instructions: Free Exercise DB (public domain).</p>{% endif %}
 {% endblock %}

@@ -15,7 +15,9 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
 from health_import import metric_group, normalize_health_payload
+import exercise_catalog
 import push
+import requests
 from workout_parser import parse_workout_note
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -182,6 +184,8 @@ def initialize_db():
                 "user_id": "INTEGER REFERENCES users(id)",
                 "session_id": "TEXT",
                 "sets_json": "TEXT",
+                # Free Exercise DB id chosen or matched for this exercise (photos, instructions).
+                "catalog_id": "TEXT",
             },
             # source is 'apple_health' for imported check-ins, NULL for ones entered in TimGym.
             "measurements": {"user_id": "INTEGER REFERENCES users(id)", "source": "TEXT"},
@@ -433,7 +437,9 @@ def gym_sessions(db, user_id, since=None, limit=None, until=None):
                                                    "volume": 0.0, "logged_at": row["created_at"], "health": None})
         session_entry["logged_at"] = min(session_entry["logged_at"], row["created_at"])
         sets = row_sets(row)
-        session_entry["exercises"].append({"name": row["exercise"], "summary": summarize_sets(sets), "notes": row["notes"]})
+        card = catalog_card(catalog_entry(row["exercise"], row["catalog_id"]))
+        session_entry["exercises"].append({"name": row["exercise"], "summary": summarize_sets(sets), "notes": row["notes"],
+                                           "image": card["image"] if card else None})
         session_entry["sets"] += len(sets)
         session_entry["volume"] += sum(one["reps"] * (one.get("weight_kg") or 0) for one in sets)
         if limit and len(sessions) > limit:
@@ -509,13 +515,18 @@ def health_workouts(db, user_id, since=None, limit=None, until=None):
 def recent_exercises(db, user_id, limit=8):
     """Exercises by most recent use, with last session, trend, and best."""
     rows = db.execute(
-        "SELECT exercise, workout_date, sets, reps, weight_kg, sets_json FROM workouts WHERE user_id = ? ORDER BY workout_date DESC, id DESC",
+        "SELECT exercise, catalog_id, workout_date, sets, reps, weight_kg, sets_json FROM workouts WHERE user_id = ? ORDER BY workout_date DESC, id DESC",
         (user_id,),
     ).fetchall()
     by_name = {}
     for row in rows:
-        key = row["exercise"].casefold()
-        entry = by_name.setdefault(key, {"name": row["exercise"], "dates": [], "tops": {}, "best": None, "last_sets": None})
+        # "Squat" logged before the catalog and "Barbell Squat" after it are one exercise.
+        key = exercise_identity(row["exercise"], row["catalog_id"])
+        if key not in by_name:
+            card = catalog_card(catalog_entry(row["exercise"], row["catalog_id"]))
+            by_name[key] = {"name": row["exercise"], "image": card["image"] if card else None,
+                            "dates": [], "tops": {}, "best": None, "last_sets": None}
+        entry = by_name[key]
         sets = row_sets(row)
         if entry["last_sets"] is None:
             entry["last_sets"] = sets
@@ -534,7 +545,7 @@ def recent_exercises(db, user_id, limit=8):
         tops = [entry["tops"][day] for day in entry["dates"] if day in entry["tops"]]
         change = tops[0]["weight_kg"] - tops[1]["weight_kg"] if len(tops) > 1 else None
         results.append({
-            "name": entry["name"], "last_date": entry["last_date"], "summary": summarize_sets(entry["last_sets"]),
+            "name": entry["name"], "image": entry["image"], "last_date": entry["last_date"], "summary": summarize_sets(entry["last_sets"]),
             "top": top_set(entry["last_sets"]), "best": entry["best"], "change": change, "sessions": len(entry["dates"]),
         })
     return results
@@ -742,10 +753,15 @@ def has_health_data(db, user_id):
 @app.get("/exercises/<path:name>")
 @login_required
 def exercise_history(name):
-    rows = get_db().execute(
-        "SELECT workout_date, exercise, sets, reps, weight_kg, sets_json, notes FROM workouts WHERE user_id = ? AND exercise = ? COLLATE NOCASE ORDER BY workout_date DESC, id DESC LIMIT 200",
-        (g.user["id"], name),
-    ).fetchall()
+    """An exercise's history across every name it was logged under, with its catalog card."""
+    wanted = exercise_identity(name)
+    rows = [
+        row for row in get_db().execute(
+            "SELECT workout_date, exercise, catalog_id, sets, reps, weight_kg, sets_json, notes FROM workouts WHERE user_id = ? ORDER BY workout_date DESC, id DESC",
+            (g.user["id"],),
+        )
+        if row["exercise"].casefold() == name.casefold() or exercise_identity(row["exercise"], row["catalog_id"]) == wanted
+    ][:200]
     if not rows:
         abort(404)
     entries = []
@@ -757,7 +773,11 @@ def exercise_history(name):
             best = top
         entries.append({"date": row["workout_date"], "summary": summarize_sets(sets), "top": top, "notes": row["notes"],
                         "volume": sum(one["reps"] * (one.get("weight_kg") or 0) for one in sets)})
-    return render_template("exercise.html", tab="home", name=rows[0]["exercise"], entries=entries, best=best)
+    entry = catalog_entry(rows[0]["exercise"], rows[0]["catalog_id"])
+    return render_template(
+        "exercise.html", tab="home", name=entry["name"] if entry else rows[0]["exercise"], entries=entries, best=best,
+        catalog=entry, photos=[url_for("catalog_image", exercise_id=entry["id"], index=i) for i in range(len(entry["images"]))] if entry else [],
+    )
 
 
 @app.get("/log")
@@ -1086,10 +1106,13 @@ def normalize_workout_payload(payload):
             if rpe is not None and rpe < 1:
                 raise ValueError("RPE must be between 1 and 10.")
             normalized.append({"reps": reps, "weight_kg": weight, "rpe": rpe})
+        catalog_id = exercise.get("catalog_id")
         normalized_exercises.append({
             "name": name,
             "notes": str(exercise.get("notes", "")).strip()[:500],
             "sets": normalized,
+            # A chosen catalog entry wins; otherwise match the name (None if nothing fits).
+            "catalog_id": catalog_id if exercise_catalog.get(catalog_id) else catalog_id_for(name),
         })
     return workout_date, normalized_exercises
 
@@ -1102,12 +1125,13 @@ def persist_workout(workout_date, exercises, user_id):
         rows.append((
             user_id, session_id, workout_date, exercise["name"], len(exercise["sets"]),
             first["reps"], first["weight_kg"], exercise["notes"], json.dumps(exercise["sets"]),
+            exercise.get("catalog_id"),
         ))
     db = get_db()
     db.executemany(
         """INSERT INTO workouts
-           (user_id, session_id, workout_date, exercise, sets, reps, weight_kg, notes, sets_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (user_id, session_id, workout_date, exercise, sets, reps, weight_kg, notes, sets_json, catalog_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
     db.commit()
@@ -1137,6 +1161,7 @@ def interpret_workout():
                     "default_weight_kg": exercise["default_weight_kg"],
                     "sets": exercise["sets"],
                     "missing_fields": exercise["missing_fields"],
+                    **catalog_choice(exercise["name"]),
                 }
                 for exercise in draft["exercises"]
             ],
@@ -1605,6 +1630,75 @@ def service_worker():
     response = send_file(Path(app.static_folder) / "sw.js", mimetype="text/javascript", max_age=0)
     response.headers["Service-Worker-Allowed"] = "/"
     return response
+
+
+# ---------------------------------------------------------------------------
+# Exercise catalog (Free Exercise DB): matching, search, and cached photos.
+
+CATALOG_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+
+
+def catalog_id_for(name):
+    entry = exercise_catalog.match(name)
+    return entry["id"] if entry else None
+
+
+def catalog_entry(name, catalog_id=None):
+    """The catalog entry for a logged exercise: its stored id, else a name match."""
+    return exercise_catalog.get(catalog_id) if catalog_id else exercise_catalog.match(name)
+
+
+def catalog_card(entry):
+    """What pages and the picker need about an entry, including its photo URL."""
+    if not entry:
+        return None
+    card = exercise_catalog.summary(entry)
+    card["image"] = url_for("catalog_image", exercise_id=entry["id"], index=0) if card["images"] else None
+    return card
+
+
+def catalog_choice(name):
+    """For a parsed exercise: the matched entry, renaming it to the catalog name."""
+    entry = exercise_catalog.match(name)
+    if not entry:
+        return {"catalog_id": None, "catalog": None}
+    return {"name": entry["name"], "catalog_id": entry["id"], "catalog": catalog_card(entry)}
+
+
+def exercise_identity(name, catalog_id=None):
+    """Group history by catalog entry, so "Squat" and "Barbell Squat" are one lift."""
+    entry = catalog_entry(name, catalog_id)
+    return ("catalog", entry["id"]) if entry else ("name", name.casefold())
+
+
+@app.get("/catalog/search")
+@login_required
+def catalog_search():
+    return {"results": [catalog_card(entry) for entry in exercise_catalog.search(request.args.get("q", "")[:80], limit=8)]}
+
+
+@app.get("/catalog/image/<exercise_id>/<int:index>.jpg")
+@login_required
+def catalog_image(exercise_id, index):
+    """Serve an exercise photo, downloading it once into the data volume."""
+    entry = exercise_catalog.get(exercise_id)
+    path = exercise_catalog.image_path(entry, index) if entry else None
+    if not path:
+        abort(404)
+    cached = DB_PATH.parent / "exercise-images" / path
+    if not cached.exists():
+        try:
+            response = requests.get(exercise_catalog.IMAGE_SOURCE + path, timeout=10)
+        except requests.RequestException:
+            abort(404)
+        if response.status_code != 200 or not response.headers.get("content-type", "").startswith("image/") \
+                or len(response.content) > CATALOG_IMAGE_MAX_BYTES:
+            abort(404)
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        partial = cached.with_name(f".{cached.name}.{secrets.token_hex(4)}")
+        partial.write_bytes(response.content)
+        partial.replace(cached)
+    return send_file(cached, mimetype="image/jpeg", max_age=30 * 24 * 3600)
 
 
 @app.get("/api/me")
