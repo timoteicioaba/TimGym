@@ -190,6 +190,8 @@ def initialize_db():
             },
             # source is 'apple_health' for imported check-ins, NULL for ones entered in TimGym.
             "measurements": {"user_id": "INTEGER REFERENCES users(id)", "source": "TEXT"},
+            # Heart rate from Apple Health workouts: average and max BPM, and a per-minute series (JSON list).
+            "health_workouts": {"avg_hr": "INTEGER", "max_hr": "INTEGER", "hr_json": "TEXT"},
         }.items():
             existing = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
             for name, definition in columns.items():
@@ -346,7 +348,7 @@ def local_today():
 
 def asset_version():
     try:
-        return int((Path(app.static_folder) / "app.css").stat().st_mtime)
+        return int(max((Path(app.static_folder) / name).stat().st_mtime for name in ("app.css", "share.js")))
     except OSError:
         return 0
 
@@ -802,7 +804,31 @@ def workout_day(day):
     if not sessions:
         flash("Nothing was logged on that day.")
         return redirect(url_for("index", day=day))
+    for entry in sessions:
+        entry["share"] = share_card(entry, chosen)
     return render_template("workout_day.html", tab="home", day=chosen, sessions=sessions)
+
+
+def share_card(entry, day):
+    """What the shareable workout image shows, drawn on the phone by static/share.js."""
+    health = entry.get("health") if entry["kind"] == "gym" else entry
+    health = health or {}
+    try:
+        series = json.loads(health.get("hr_json") or "null") or []
+    except ValueError:
+        series = []
+    card = {
+        "date": day.strftime("%a %d %b %Y"), "slug": day.isoformat(),
+        "duration_s": health.get("duration_s"), "kcal": health.get("active_kcal"),
+        "avg_hr": health.get("avg_hr"), "max_hr": health.get("max_hr"), "hr": series,
+    }
+    if entry["kind"] == "gym":
+        card.update(label=entry["split"]["label"] or "Gym session", subtitle=health.get("activity"),
+                    sets=entry["sets"], volume=entry["volume"] or 0, groups=entry["split"]["groups"],
+                    exercises=[{"name": e["name"], "summary": e["summary"], "image": e["image"]} for e in entry["exercises"]])
+    else:
+        card.update(label=short_activity(entry["activity"]), subtitle=None, sets=0, volume=0, groups=[], exercises=[])
+    return card
 
 
 @app.get("/log")
@@ -1277,13 +1303,15 @@ def store_health_import(db, user_id, imported, source):
     record a summary for Settings. Re-imports update rows in place."""
     db.executemany(
         """INSERT INTO health_workouts
-           (user_id, external_id, workout_date, started_at, activity, duration_s, active_kcal, distance_km)
-           VALUES (:user_id, :external_id, :workout_date, :started_at, :activity, :duration_s, :active_kcal, :distance_km)
+           (user_id, external_id, workout_date, started_at, activity, duration_s, active_kcal, distance_km, avg_hr, max_hr, hr_json)
+           VALUES (:user_id, :external_id, :workout_date, :started_at, :activity, :duration_s, :active_kcal, :distance_km, :avg_hr, :max_hr, :hr_json)
            ON CONFLICT (user_id, external_id) DO UPDATE SET
              workout_date = excluded.workout_date, started_at = excluded.started_at, activity = excluded.activity,
              duration_s = excluded.duration_s, active_kcal = excluded.active_kcal, distance_km = excluded.distance_km,
+             avg_hr = excluded.avg_hr, max_hr = excluded.max_hr, hr_json = excluded.hr_json,
              updated_at = CURRENT_TIMESTAMP""",
-        [dict(workout, user_id=user_id) for workout in imported["workouts"]],
+        [dict(workout, user_id=user_id, hr_json=json.dumps(workout["hr_series"]) if workout.get("hr_series") else None)
+         for workout in imported["workouts"]],
     )
     # Each export carries the day's running total, so the latest value replaces the stored one.
     db.executemany(

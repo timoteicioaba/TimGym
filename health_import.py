@@ -155,6 +155,9 @@ def _workout(item):
             if energy is not None:
                 break
     distance = _km(item["distance_km"]) if item.get("distance_km") is not None else _km(item.get("distance"))
+    summary_hr = item.get("heartRate") if isinstance(item.get("heartRate"), dict) else {}
+    avg_hr = _bpm(item.get("avgHeartRate", item.get("avg_hr", summary_hr.get("avg"))))
+    max_hr = _bpm(item.get("maxHeartRate", item.get("max_hr", summary_hr.get("max"))))
 
     return {
         # Without an id, the start time and activity identify a workout across re-sends.
@@ -165,7 +168,33 @@ def _workout(item):
         "duration_s": int(round(duration)) if duration is not None else None,
         "active_kcal": energy,
         "distance_km": distance,
+        "avg_hr": avg_hr,
+        "max_hr": max_hr,
+        "hr_series": _hr_series(item.get("heartRateData")),
     }, None
+
+
+def _bpm(value):
+    amount, _ = _quantity(value)
+    return round(amount) if amount is not None and 25 <= amount <= 250 else None
+
+
+def _hr_series(samples, limit=120):
+    """Per-minute average heart rate as a short list of ints, for a small chart."""
+    if not isinstance(samples, list):
+        return None
+    values = []
+    for sample in samples:
+        if isinstance(sample, dict):
+            bpm = _bpm(sample.get("Avg", sample.get("avg", sample.get("qty"))))
+            if bpm is not None:
+                values.append(bpm)
+    if len(values) < 2:
+        return None
+    if len(values) > limit:
+        step = len(values) / limit
+        values = [values[int(index * step)] for index in range(limit)]
+    return values
 
 
 def _body_value(field, qty, units):

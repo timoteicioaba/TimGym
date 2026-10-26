@@ -24,6 +24,9 @@ AUTO_EXPORT = {
                 "end": "2026-10-22 00:20:00 +0300",
                 "duration": 3000,
                 "activeEnergyBurned": {"qty": 310, "units": "kcal"},
+                "avgHeartRate": {"qty": 149.2, "units": "count/min"},
+                "maxHeartRate": {"qty": 186, "units": "count/min"},
+                "heartRateData": [{"date": f"2026-10-21 23:{30 + i}:00 +0300", "Avg": 120 + i, "Max": 130 + i} for i in range(3)],
             },
             {"name": "Broken", "start": "not a date"},
         ],
@@ -60,6 +63,15 @@ class HealthAutoExportTests(unittest.TestCase):
         self.assertEqual(lift["workout_date"], "2026-10-21")
         self.assertEqual(lift["active_kcal"], 310.0)
         self.assertIsNone(lift["distance_km"])
+        self.assertEqual((lift["avg_hr"], lift["max_hr"], lift["hr_series"]), (149, 186, [120, 121, 122]))
+        self.assertEqual((run["avg_hr"], run["max_hr"], run["hr_series"]), (None, None, None))
+
+    def test_heart_rate_summary_and_long_series(self):
+        workout = {"name": "Walk", "start": "2026-10-21 07:00:00 +0300", "duration": 600, "heartRate": {"avg": {"qty": 101.6}, "max": {"qty": 400}},
+                   "heartRateData": [{"Avg": 90 + i % 20} for i in range(500)]}
+        (parsed,) = normalize_health_payload({"data": {"workouts": [workout]}})["workouts"]
+        self.assertEqual((parsed["avg_hr"], parsed["max_hr"]), (102, None))  # 400 bpm is not a heart rate
+        self.assertLessEqual(len(parsed["hr_series"]), 120)
 
     def test_daily_metrics_add_up_and_others_are_ignored(self):
         self.assertEqual(self.result["daily"], {

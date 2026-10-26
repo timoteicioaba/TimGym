@@ -9,7 +9,7 @@
 {% if entry.kind == "gym" %}
 {% set meta %}{% if entry.health and entry.health.duration_s %}{{ entry.health.duration_s|duration }} · {% endif %}{% if entry.health and entry.health.active_kcal %}{{ entry.health.active_kcal|round|int }} kcal · {% endif %}{{ entry.sets }} set{{ "" if entry.sets == 1 else "s" }}{% if entry.volume %} · {{ "{:,.0f}".format(entry.volume) }} kg{% endif %}{% endset %}
 {% call ui.tile(entry.split.label or "Gym session", "workout", "dumbbell", meta, span=2) %}
-  {% if entry.health %}<p class="tile-empty">{{ ui.badge() }}{{ entry.health.activity }} · {{ entry.health.started_at|clock }}</p>{% endif %}
+  <div class="tile-cta">{% if entry.health %}<p class="tile-empty">{{ ui.badge() }}{{ entry.health.activity }} · {{ entry.health.started_at|clock }}</p>{% else %}<span></span>{% endif %}<button class="pill-action share-button" type="button" aria-label="Share workout image" data-share="{{ entry.share|tojson|forceescape }}">Share</button></div>
   {% if entry.split.groups %}
   <div class="stage-bar" role="img" aria-label="Sets by muscle group: {% for label, percent in entry.split.groups %}{{ label }} {{ percent }}%{{ ', ' if not loop.last }}{% endfor %}">
     {% for label, percent in entry.split.groups %}<span class="group-{{ label|lower }}" style="--share:{{ percent }}%"></span>{% endfor %}
@@ -37,10 +37,42 @@
   {% if entry.activity is strength %}
   <div class="tile-cta"><span class="tile-empty">No exercises logged for this session.</span><a class="pill-action" href="{{ url_for('log_page', session=entry.id) }}">Log exercises</a></div>
   {% else %}
-  <p class="tile-empty">{{ ui.badge() }}Recorded by Apple Health</p>
+  <div class="tile-cta"><p class="tile-empty">{{ ui.badge() }}Recorded by Apple Health</p><button class="pill-action share-button" type="button" aria-label="Share workout image" data-share="{{ entry.share|tojson|forceescape }}">Share</button></div>
   {% endif %}
 {% endcall %}
 {% endif %}
 {% endfor %}
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+// The in-app page swap only re-runs inline scripts, so share.js is added here. Images are
+// drawn as soon as it loads, so a tap can open the share sheet straight away.
+const shareButtons = [...document.querySelectorAll(".share-button")];
+const shareReady = window.TimGymShare ? Promise.resolve() : new Promise((resolve, reject) => {
+  const script = document.createElement("script");
+  script.src = {{ (url_for('static', filename='share.js') ~ '?v=' ~ asset_version)|tojson }};
+  script.onload = resolve;
+  script.onerror = reject;
+  document.head.append(script);
+});
+shareButtons.forEach(button => {
+  const data = JSON.parse(button.dataset.share);
+  const image = shareReady.then(() => window.TimGymShare.render(data));
+  image.then(blob => { button.blob = blob; }, () => {});
+  button.addEventListener("click", async () => {
+    const label = button.textContent;
+    button.disabled = true;
+    try {
+      if (!button.blob) button.textContent = "Creating image…";
+      const result = await window.TimGymShare.share(data, button.blob || await image);
+      button.textContent = result === "downloaded" ? "Image saved" : label;
+    } catch (error) {
+      button.textContent = "Couldn't create image";
+    }
+    button.disabled = false;
+    setTimeout(() => { button.textContent = label; }, 2500);
+  });
+});
+</script>
 {% endblock %}

@@ -1,3 +1,5 @@
+import html
+import json
 import os
 import sys
 import tempfile
@@ -10,6 +12,7 @@ os.environ.setdefault("SECRET_KEY", "test")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app as timgym  # noqa: E402
 import exercise_catalog as catalog  # noqa: E402
+from health_import import normalize_health_payload  # noqa: E402
 
 
 class MatchTests(unittest.TestCase):
@@ -145,6 +148,28 @@ class DayPageTests(unittest.TestCase):
         today = self.client.get("/?day=2026-10-15").get_data(as_text=True)
         self.assertIn('href="/workouts/2026-10-15"', today)
         self.assertIn("<strong>Leg day</strong>", today)
+
+    def test_day_page_offers_a_share_image_with_apple_stats(self):
+        self.client.post("/workouts/save", headers={"X-CSRF-Token": "token"}, json={"date": "2026-10-16", "exercises": [
+            {"name": "Bench press", "sets": [{"reps": 8, "weight_kg": 60}] * 3},
+        ]})
+        db = timgym.connect_db()
+        timgym.store_health_import(db, self.user_id, normalize_health_payload({"data": {"workouts": [{
+            "id": "share-1", "name": "Traditional Strength Training", "start": "2026-10-16 18:00:00 +0300", "duration": 3000,
+            "activeEnergyBurned": {"qty": 310, "units": "kcal"}, "avgHeartRate": {"qty": 131}, "maxHeartRate": {"qty": 170},
+            "heartRateData": [{"Avg": 110}, {"Avg": 140}, {"Avg": 135}],
+        }]}}), "test")
+        db.commit()
+        db.close()
+        page = self.client.get("/workouts/2026-10-16").get_data(as_text=True)
+        self.assertIn("Share workout", page)
+        self.assertIn("share.js", page)
+        start = page.index('data-share="') + len('data-share="')
+        card = json.loads(html.unescape(page[start:page.index('"', start)]))
+        self.assertEqual((card["label"], card["duration_s"], card["kcal"], card["avg_hr"], card["max_hr"], card["hr"]),
+                         ("Chest day", 3000, 310.0, 131, 170, [110, 140, 135]))
+        self.assertEqual(card["exercises"], [{"name": "Bench press", "summary": "3×8 @ 60 kg", "image": card["exercises"][0]["image"]}])
+        self.assertTrue(card["exercises"][0]["image"].startswith("/catalog/image/"))
 
     def test_empty_or_invalid_days(self):
         self.assertEqual(self.client.get("/workouts/2026-01-01").status_code, 302)
